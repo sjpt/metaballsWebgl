@@ -42,7 +42,7 @@ More control is via a structure `marching.X`
     yinz: 0             // manual override value used to split y in 3d/2d lookup, needed where xnum*ynum > maxtexsize
 ```
 ## algorithm
-metaballsWebgl has been derived from standard marching cubes, with several optimizations.
+metaballsWebgl has been derived from standard marching cubes, with several optimizations. The optimizations are mainly designed to mitigate the inherent inefficiencies of GPU coding in Webgl.
 
 It operates in four passes:
 1. spatial subdivision determines which spheres are active in which super-voxel
@@ -61,3 +61,13 @@ The final marching phase generates 5 triangles for every voxel. Most voxels have
 
 The optimizations mean that the flow is highly non-uniform, and likely to behave very poorly on older gpus and gpus in many tablets and phones.
 
+### three.js note
+three.js is an excellent framework, but we have had some issues with this project, which is somewhat outside the normal use of three.js.
+
+#### attribute-less coding
+Most of the code is inherently attribute-less; in particular vertex positions are arrived at procedurally, and in WebGL2 can be derived from `gl_VertexID` and `gl_InstanceID`. The calling code needs to identify the number of vertices and instances, but no specific vertex or instance attributes are needed.
+
+three.js does not currently support this; it requires a position vertex attribute and at least on instance attribute. This is not difficult (and in necessary in WebGL1), but does involve a little extra code in the application that should be unnecessary.
+
+https://github.com/mrdoob/three.js/issues/19430
+https://github.com/mrdoob/three.js/pull/19451
