@@ -1,0 +1,184 @@
+/**
+ * Derived from MarchingCubes.js
+* This version modified to do complete work on GPU sjpt 8 May 2020 to 19 May 2020
+*
+* works in four passes
+*  1: spat: use a course grid and deciding which spheres are 'active' within each course voxel (output spatrt)
+*  2: fill: compute the potential function at every point on the full grid (using spatrt for optimization)
+*  3: box: for each voxel compute its marching cubes 'key'
+*  4: march: run marching cubes on the voxels, up to 5 triangles, 15 vertices per voxel
+
+ ***/
+var THREE, Stats, Marching;
+var queryloadpromise, trywebgl2=true, gldebug, Gldebug;
+//function test() {
+
+// general initialization of test scope
+var camera, renderer, canvas, rca, controls, stats,
+framenum=0, X, marching, isWebGL2, scene;
+function init() {
+    console.clear();
+    console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
+    eval(unescape(window.location.search.substring(1)));
+
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.z = 3;
+    var gl;
+
+    if (trywebgl2) {
+        canvas = document.createElement('canvas');
+
+        // Try creating a WebGL 2 context first
+        rca = {};
+        gl = canvas.getContext('webgl2', rca);
+        if (!gl) {
+            gl = canvas.getContext('experimental-webgl2', rca);
+        }
+        isWebGL2 = !!gl;
+    }
+    if (isWebGL2) {
+        renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
+    } else {
+        renderer = new THREE.WebGLRenderer();
+    }
+    gl = renderer.getContext();
+
+    if (gldebug && Gldebug) Gldebug.start({gl, type: gldebug});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.autoClear = false;
+
+    document.body.appendChild(renderer.domElement);
+
+    THREE.MOUSE.ROTATE = 0; // ? needed because of different THREE versions???
+    controls = new THREE.TrackballControls(camera, renderer.domElement);
+    controls.enableDamping = false;
+    controls.dampingFactor = 0.0;
+    controls.rotateSpeed = 3;
+    // controls.screenSpacePanning = false;
+    window.addEventListener( 'resize', onWindowResize, false );
+
+    stats = new Stats();
+    stats.domElement.id = 'statsid';
+    stats.domElement.style.top = '0';
+    stats.domElement.style.right = '0';
+    stats.domElement.style.left = '';
+    stats.domElement.style.position = 'absolute';
+    document.body.appendChild( stats.domElement );
+
+    scene = new THREE.Scene();
+
+    // scene = new THREE.Scene();
+
+    setTimeout( () => {
+        marching = new Marching(isWebGL2);
+        eval(unescape(window.location.search.substring(1)));
+        X = marching.X;
+        scene.add(marching.three);
+        animate();
+    });
+
+}
+init();
+
+
+/** make sure camera tracks window changes */
+function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize( window.innerWidth, window.innerHeight );
+}
+
+function jstring(k) {
+    return JSON.stringify(k,
+        function jrep (key, val) {
+            return val.toFixed ? Number(val.toFixed(3)) : val;
+        }, '<br>'
+    ).split('"').join('');
+}
+
+
+var sd = Date.now(), time = 0, timek = Infinity;
+function animate() {
+    framenum++;
+    try {eval(window.code.value);} catch(e){}
+
+    const ed = Date.now();
+    time /* = spatFillUniforms.time.value */ += (ed-sd) / timek;
+    filldata(time);
+    sd = ed;
+
+    controls.update();
+
+    window.requestAnimationFrame(animate);
+    // marching.render(renderer, camera);
+    renderer.clear(true, true, true);
+    for (let i = 0; i < X.loops; i++) {
+        if (X.dowire || X.dopoints || !X.doshade)
+            marching.testRender(renderer, undefined, camera);    // for performance tests with points/etc
+        else if (X.doshade)
+            renderer.render(scene, camera);                         // normal path
+    }
+    stats.update();
+    window.msg.innerHTML = `${jstring(X)}`
+
+
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// set up positions
+var data = [];
+var datatexture;
+var gridSpheres = false; // see below for placing
+window.fillk = 0.7;
+
+function filldata(t = 1234, k = window.fillk) {
+    const {npart} = X;
+    X.ntexsize = npart;         // for this test the texture is the correct size
+    if (data.length !== 4*npart) {
+        data = new Float32Array(4*npart);
+        datatexture = new THREE.DataTexture(data, npart, 1, THREE.RGBAFormat, THREE.FloatType);
+    }
+    datatexture.needsUpdate = true;
+    let ii = (gridSpheres) ? fillgrid() : 0;
+    for (let i=0; ii<npart*4; i++) {
+        let iin = i/npart;
+        data[ii++] = k*sp(i + t*(1.3 + 2.1 * iin));
+        data[ii++] = k*sp(i*1.3 + t*(1.9 + iin));
+        data[ii++] = k*sp(i*1.7 + t*(2.2 + 0.2 * iin));
+        data[ii++] = 1;
+    }
+    marching.updateData(datatexture, X.sphereScale);
+    function sp(x) { var r = Math.sin(x); return Math.abs(r) * r; }
+}
+
+// filldata assistant for regular box (for debug)
+// The first 'usebox' spheres are placed on a grid
+// If usebox is not a number then as many spheres as possible are gridded
+// In either case, any remaining spheres (up to npart) will be placed by filldata code
+function fillgrid() {
+    const n3 = (typeof gridSpheres === 'number') ? gridSpheres : Math.floor(X.npart ** (1/3) + 0.001);
+    let ii = 0;
+    for (let x=0; x<n3; x++) {
+        for (let y=0; y<n3; y++) {
+            for (let z=0; z<n3; z++) {
+                data[ii++] = 1.5 * (x/n3 - 0.5);
+                data[ii++] = 1.5 * (y/n3 - 0.5);
+                data[ii++] = 1.5 * (z/n3 - 0.5);
+                data[ii++] = 1;
+            }
+        }
+    }
+    return ii;
+}
+
+
+if (queryloadpromise) {
+    setInterval( () => queryloadpromise().then(x => {
+        window.perfmsg.innerHTML = `${jstring(x)}<br><b> ${(x.realutil * 100).toFixed(1)}%</b>`;
+    }), 1000);
+}
+
+//} // test
+//test();
+
