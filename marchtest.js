@@ -10,16 +10,18 @@
 
  ***/
 var THREE, Stats, Marching;
-var queryloadpromise, trywebgl2=true, gldebug, Gldebug;
+var queryloadpromise, trywebgl2=true, gldebug, Gldebug, location;
 //function test() {
 
 // general initialization of test scope
 var camera, renderer, canvas, rca, controls, stats,
-framenum=0, X, marching, isWebGL2, scene;
+framenum=0, X, marching, isWebGL2, scene, searchEval;
 function init() {
     console.clear();
     console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
-    eval(unescape(window.location.search.substring(1)));
+    searchEval = unescape(window.location.search.substring(1));
+    if (location.href.indexOf('htmlpreview') !== -1) searchEval = '';
+    eval(searchEval);
 
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.z = 3;
@@ -71,7 +73,7 @@ function init() {
 
     setTimeout( () => {
         marching = new Marching(isWebGL2);
-        eval(unescape(window.location.search.substring(1)));
+        eval(searchEval);
         X = marching.X;
         scene.add(marching.three);
         animate();
