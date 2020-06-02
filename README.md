@@ -9,6 +9,8 @@ It uses three.js.
 It is designed to be fast for dynamic data; for example it can handle 10,000 spheres at a grid resolution of 100x100x100 at 60 fps using 33% of a 1080 gpu.
 It recomputes everything every render, so is inefficient for static data.
 
+A test case can be viewed at https://sjpt.github.io/marchtest.html
+
 ## basic usage
 ```javascript
 marching = new Marching(isWebGL2);

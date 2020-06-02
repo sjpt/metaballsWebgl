@@ -20,6 +20,7 @@ async function go() {
     await addscript("https://cdn.jsdelivr.net/gh/sjpt/metaballsWebgl/marching.js")
     await addscript("https://cdn.jsdelivr.net/gh/sjpt/metaballsWebgl/marchtest.js")
 }
+// "https://cdn.jsdelivr.net/gh/mrdoob/three.js/dev/build/three.js"
 
 window.onload = () => {
     go();
