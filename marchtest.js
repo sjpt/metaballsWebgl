@@ -182,7 +182,6 @@ if (queryloadpromise) {
 
 
 window.onload = () => {
-    init();
 
     document.body.innerHTML = `
 
@@ -233,5 +232,7 @@ window.onload = () => {
 
     <textarea id="code">// extra code here</textarea>
 </div>
-`};
+`
+init();
+};
 
