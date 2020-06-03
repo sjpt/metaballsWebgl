@@ -20,10 +20,11 @@ marching.updateData(datatexture, sphereScale);
 * `datatexture` is an n wide, 1 high texture of xyz values.
 * `sphereScale` is the inverse of the minimum/maximum xyz size, to scale to -1..1 range.
 
-This is illustrated in **marchtest.js**, run using **marching.html**
+This is illustrated in **marchtest.js**, run using **marchtestlocal.html** or **marchtestremote.html**.
+These are the same except they access the necessary files in different ways.
 
 ## more control
-More control is via a structure `marching.X`
+A structure `marching.X` provides more control.
 ```
     rad: 0.1,           // radius of spheres
     radInfluence: 1.5,  // how far infludence spreads
