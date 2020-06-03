@@ -1,13 +1,5 @@
 /**
- * Derived from MarchingCubes.js
-* This version modified to do complete work on GPU sjpt 8 May 2020 to 19 May 2020
-*
-* works in four passes
-*  1: spat: use a course grid and deciding which spheres are 'active' within each course voxel (output spatrt)
-*  2: fill: compute the potential function at every point on the full grid (using spatrt for optimization)
-*  3: box: for each voxel compute its marching cubes 'key'
-*  4: march: run marching cubes on the voxels, up to 5 triangles, 15 vertices per voxel
-
+ * test case for marching.js, at https://github.com/sjpt/metaballsWebgl
  ***/
 var THREE, Stats, Marching;
 var queryloadpromise, trywebgl2=true, gldebug, Gldebug, location;
@@ -103,13 +95,13 @@ function jstring(k) {
 }
 
 
-var sd = Date.now(), time = 0, timek = Infinity;
+var sd = Date.now(), time = 0, speed = 0.1;
 function animate() {
     framenum++;
     try {eval(window.code.value);} catch(e){}
 
     const ed = Date.now();
-    time /* = spatFillUniforms.time.value */ += (ed-sd) / timek;
+    time /* = spatFillUniforms.time.value */ += (ed-sd) * speed /1000;
     filldata(time);
     sd = ed;
 
@@ -206,8 +198,8 @@ window.onload = () => {
     radInfluence<input type="range" min="1.01" max="4" value="1.5" step="0.001"
         oninput="X.radInfluence=this.value"/>
     <br>
-    speed<input type="range" min="0" max="10" value="0" step="0.1"
-        oninput="timek=20000/this.value"/>
+    speed<input type="range" min="0" max="0.5" value="0.1" step="0.01"
+        oninput="speed=this.value"/>
     <br>
     #spheres<input type="range" min="0" max="4.3" value="3" step="0.1"
         oninput="X.npart=Math.min(2**14, Math.ceil(10 ** this.value))"/>

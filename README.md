@@ -59,11 +59,11 @@ the final pass as part of the 'real' three scene.
 
 The relatively rigid limitations of shader programming, especially in Webgl, mean there are some inherent inefficiencies.
 
-The spatial subdivision pass outputs a bitmap for each super-voxel, indicating whether each sphere does or does not contribute to that super-voxel. The bitmap is saved in RGBA float texture, 24 bits per float, 96 bits per texture position. We typically use 25x25x25 super-voxels. This means that the fill pass
+The spatial subdivision pass outputs a bitmap for each super-voxel, indicating whether each sphere does or does not contribute to that super-voxel. The bitmap is saved in RGBA float texture, 24 bits per float, 96 bits per texture position. We typically use 25x25x25 super-voxels. This means that the fill pass just has to process the bit for spheres that are not active in the super-voxel, but does not have to lookup the sphere position and compute its contribution to the potential.
 
-The final marching phase generates 5 triangles for every voxel. Most voxels have no surface and all the triangles are 'dummy' triangles with three 'dummy' vertices, almost no voxels use all 5 triangles. The shaders are written to minimize time spent handling dummy vertices and triangles; the purpose of the voxel relevance pass is to assist that. Nevertheless the intrinsic overhead (outside the shaders) of handling vertices and trianlges means that nearly 50% of the gpu time goes into handling these dummy triangles.
+The final marching phase generates 5 triangles for every voxel. Most voxels have no surface and all the triangles are 'dummy' triangles with three 'dummy' vertices; almost none of the voxels use all 5 triangles. The shaders are written to minimize time spent handling dummy vertices and triangles; the purpose of the voxel relevance pass is to assist that. Nevertheless the intrinsic overhead (outside the shaders) of handling vertices and triangles meanss that nearly 50% of the gpu time goes into handling these dummy triangles.
 
-The optimizations mean that the flow is highly non-uniform, and likely to behave very poorly on older gpus and gpus in many tablets and phones.
+The optimizations mean that the flow is highly non-uniform, and likely to behave very poorly on older gpus, and gpus in many tablets and phones.
 
 ### three.js note
 three.js is an excellent framework, but we have had some issues with this project, which is somewhat outside the normal use of three.js.
