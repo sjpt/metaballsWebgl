@@ -42,7 +42,8 @@ const X = me.X = window.X = {
     loops: 1,           // number of repititions of loop to apply each render cycle
     trivmarch: false,   // true for trivial version of marching cubes pass, performance test to estimate overheads
     xnum: 100, ynum: undefined, znum: undefined,     // numbers for voxel boundary count (ynum and znum default to xnum)
-    yinz: 0             // manual override value used to split y in 3d/2d lookup, needed where xnum*ynum > maxtexsize
+    yinz: 0,            // manual override value used to split y in 3d/2d lookup, needed where xnum*ynum > maxtexsize
+    threeShader: true   // true to use customized three shader, false for trivial shading
 }
 
 var
@@ -83,7 +84,7 @@ function beforeRender(renderer, scene, camera) {
         spatinit();
         fillinit();
     }
-    const num = [X.xnum, X.ynum, X.znum, X.yinz].join(',');
+    const num = [X.xnum, X.ynum, X.znum, X.yinz, X.threeShader].join(',');
     if (num !== lastnum) {
         fillinit();
         marchinit(); // before boxinit even though box render done before march render
@@ -444,7 +445,7 @@ function marchgeomgen() {
 function marchmatgen() {
     const {xnum, ynum, znum, instancing} = X;
 
-    marchvert =
+    var marchvertPre =
 glsl`${codebits.vertpre}
 // marchvert
 // marching cubes vertex shader
@@ -499,7 +500,10 @@ float vk;
 float modif(int a, int b) { return float(a - (a/b)*b);}
 
 attribute float instanceID;
-void main() {             // marching cubes vertex shader marchvertmain
+// end of marchvertPre
+`;
+
+var marchvertCore = glsl` // marchvertCore, core work of computing positions
     ${X.trivmarch ? '' : '// '} gl_Position = vec4(9999, 9999, 9999, 1); return;  // trivial version
 
     zzz = vec3(1,1,1);    // unless set otherwise
@@ -591,7 +595,7 @@ void main() {             // marching cubes vertex shader marchvertmain
     norm = -mat3(modelViewMatrix) * normalize(norm);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.);
     gl_PointSize = 1.;
-}   // end of marchvert
+// end of marchvertCore
 `
 
     marchfrag =
@@ -615,12 +619,43 @@ void main() {               // marchfragmain
     gl_FragColor.xyz = (gl_FragColor.xyz);
 }
 // end marchfrag`;
+// X.threeShader = false;
+    if (!X.threeShader) {
+        marchvert =
+            `${marchvertPre}
+            void main() {
+                ${marchvertCore}
+            }`;
+        marchmat = new THREE.RawShaderMaterial({
+            fragmentShader: marchfrag,
+            vertexShader: marchvert,
+            uniforms: boxMarchUniforms
+        });
+    } else {
+        marchmat = new THREE.MeshStandardMaterial();
+        marchmat.onBeforeCompile = shader => {
+            marchmat.xshader = shader;  // for debug
+            Object.assign(shader.uniforms, boxMarchUniforms);
 
-    marchmat = new THREE.RawShaderMaterial({
-        fragmentShader: marchfrag,
-        vertexShader: marchvert,
-        uniforms: boxMarchUniforms
-    });
+            // marchvertPre set up for standalone not three material
+            // needs slight patching (may replace with cleaner mechanism?)
+            marchvertPre = marchvertPre.replace('#version', '//PATCH #version');
+            marchvertPre = marchvertPre.replace('uniform mat4 pro', '//PATCH uniform mat4 pro');
+            marchvertPre = marchvertPre.replace('attribute vec3 pos', '//PATCH attribute vec3 pos');
+            shader.vertexShader = marchvertPre + '\n' + shader.vertexShader;
+
+            // marchvertCore tailored for fitting in with three shader
+            marchvertCore += `
+            // transformed = (r * scaleFactor) * rotpos + ppos;  // transformed has modelMatrix
+            vec4 mvPosition = viewMatrix * vec4( transformed, 1.0 ); // needed if no light?
+            vNormal = norm;
+            `
+
+            const toreplace = '#include <project_vertex>'
+            shader.vertexShader = shader.vertexShader.replace(toreplace, marchvertCore);
+        }
+    }
+
     marchmat.name = 'marchmat';
     marchmesh.material = marchmat;
     marchpoints.material = marchmat;

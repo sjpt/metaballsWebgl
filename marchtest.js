@@ -15,7 +15,7 @@ var queryloadpromise, trywebgl2=true, gldebug, Gldebug, location;
 
 // general initialization of test scope
 var camera, renderer, canvas, rca, controls, stats,
-framenum=0, X, marching, isWebGL2, scene, searchEval;
+framenum=0, X, marching, isWebGL2, scene, searchEval, lightGroup;
 function init() {
     console.clear();
     console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
@@ -68,6 +68,11 @@ function init() {
     document.body.appendChild( stats.domElement );
 
     scene = new THREE.Scene();
+    lightGroup = new THREE.Group();
+    scene.add(lightGroup);
+    const lighta = new THREE.AmbientLight( 0xffffff, 0.1 ); lightGroup.add(lighta);
+    const light = new THREE.DirectionalLight(new THREE.Vector3(0,5, 0.5, 1), 1); lightGroup.add(light)
+
 
     // scene = new THREE.Scene();
 
@@ -183,6 +188,8 @@ if (queryloadpromise) {
 
 window.onload = () => {
 
+    // this is defined within the javascript to make it easier to have different html test files
+    // that bring in different versions of three.js etc
     document.body.innerHTML = `
 
 <div style="z-index:999; position:absolute; left: 1em; top:0; background-color: white; opacity: 80%; overflow: auto; max-width: 20em;">
@@ -225,6 +232,7 @@ window.onload = () => {
     trivmarch<input type="checkbox" onclick="X.trivmarch=this.checked"></button>
     instancing<input type="checkbox" onclick="X.instancing=this.checked" checked="1"></button>
     useboxnorm<input type="checkbox" onclick="X.useboxnorm=this.checked" checked="1"></button>
+    threeShader<input type="checkbox" onclick="X.threeShader=this.checked" checked="1"></button>
     <br>
     loops<input type="range" min="0" max="10" value="1" step="1"
         oninput="X.loops=this.value"/>

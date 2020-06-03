@@ -9,7 +9,7 @@ It uses three.js.
 It is designed to be fast for dynamic data; for example it can handle 10,000 spheres at a grid resolution of 100x100x100 at 60 fps using 33% of a 1080 gpu.
 It recomputes everything every render, so is inefficient for static data.
 
-A test case can be viewed at https://sjpt.github.io/marchtest.html
+A test case can be viewed at https://sjpt.github.io/marchtestlocal.html
 
 ## basic usage
 ```javascript
@@ -41,7 +41,8 @@ More control is via a structure `marching.X`
     loops: 1,           // number of repititions of loop to apply each render cycle
     trivmarch: false,   // true for trivial version of marching cubes pass, performance test to estimate overheads
     xnum: 100, ynum: undefined, znum: undefined,     // numbers for voxel boundary count (ynum and znum default to xnum)
-    yinz: 0             // manual override value used to split y in 3d/2d lookup, needed where xnum*ynum > maxtexsize
+    yinz: 0,            // manual override value used to split y in 3d/2d lookup, needed where xnum*ynum > maxtexsize
+    threeShader: true   // true to use customized three shader, false for trivial shading
 ```
 ## algorithm
 metaballsWebgl has been derived from standard marching cubes, with several optimizations. The optimizations are mainly designed to mitigate the inherent inefficiencies of GPU coding in Webgl.
