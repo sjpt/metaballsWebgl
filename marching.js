@@ -1,4 +1,5 @@
 /**
+ * now at https://github.com/sjpt/metaballsWebgl
  * Derived from MarchingCubes.js
 * This version modified to do complete work on GPU sjpt 8 May 2020 to 19 May 2020
 *
@@ -395,7 +396,7 @@ function marchgeomgen() {
         if (isWebGL2) {
             marchgeom.drawRange.count = maxt*3;
             posb = new Uint8Array(maxt*3); // data not used, but size used inside three.js for wireframe << needed till three.js fix
-            posatt = new THREE.InstancedBufferAttribute(posb, 1);
+            posatt = new THREE.BufferAttribute(posb, 1);
             posatt.count = maxt*3;       // this was for when we had a 'dummy' posb, not we have real one for wireframe
         } else {
             posb = new Uint16Array(maxt*3*3);

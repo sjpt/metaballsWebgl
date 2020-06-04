@@ -1,7 +1,7 @@
 /**
  * test case for marching.js, at https://github.com/sjpt/metaballsWebgl
  ***/
-var THREE, Stats, Marching;
+var THREE, Stats, Marching, console;
 var queryloadpromise, trywebgl2=true, gldebug, Gldebug, location;
 //function test() {
 
@@ -13,7 +13,11 @@ function init() {
     console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
     searchEval = unescape(window.location.search.substring(1));
     if (location.href.indexOf('htmlpreview') !== -1) searchEval = '';
-    eval(searchEval);
+    try {
+        eval(searchEval);
+    } catch (e) {
+        console.error('err in first eval', e);
+    }
 
     camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.z = 3;
@@ -29,6 +33,7 @@ function init() {
             gl = canvas.getContext('experimental-webgl2', rca);
         }
         isWebGL2 = !!gl;
+        if (!isWebGL2) console.error('webgl2 requested but not available, will try old webgl')
     }
     if (isWebGL2) {
         renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl });
@@ -70,8 +75,12 @@ function init() {
 
     setTimeout( () => {
         marching = new Marching(isWebGL2);
-        eval(searchEval);
-        X = marching.X;
+        try {
+            eval(searchEval);
+        } catch (e) {
+            console.error('err in second eval', e);
+        }
+            X = marching.X;
         scene.add(marching.three);
         animate();
     });
