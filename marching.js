@@ -18,7 +18,7 @@
 * This revision does not allow geometry with no vertex or
 
  ***/
-var THREE, Stats, queryloadpromise, trywebgl2=true;
+var THREE, Stats, queryloadpromise, trywebgl2=true, marchtexture;
 
 function Marching(isWebGL2) {
     var me = this;
@@ -44,7 +44,10 @@ const X = me.X = window.X = {
     trivmarch: false,   // true for trivial version of marching cubes pass, performance test to estimate overheads
     xnum: 100, ynum: undefined, znum: undefined,     // numbers for voxel boundary count (ynum and znum default to xnum)
     yinz: 0,            // manual override value used to split y in 3d/2d lookup, needed where xnum*ynum > maxtexsize
-    threeShader: true   // true to use customized three shader, false for trivial shading
+    threeShader: true,  // true to use customized three shader, false for trivial shading
+    trackStyle: 'trackColor',           // trackNone, trackColor, trackId1, trackId2
+    showTriangles: 0,   // size to show trianlges (? id1 mode only for now) 0 or -ve for none
+    marchtexture: window.marchtexture   // use the marchtexture override code (no GUI right now)
 }
 
 var
@@ -60,14 +63,14 @@ var
 const VEC3 = (x,y,z) => new THREE.Vector3(x, y, z);
 // this allows for glsl tagged template literals
 // a will contain an array of constant parts and b an array of template parts, which this function interleaves
-var glsl = (a,...bb) => a.map((x,i) => [x, bb[i]]).flat().join('');
+var glsl = window.glsl = (a,...bb) => a.map((x,i) => [x, bb[i]]).flat().join('');
 
 X.ynum = X.ynum || X.xnum;
 X.znum = X.znum || X.xnum;
 spatdivs = spatdivs || VEC3(X.spatdiv, X.spatdiv, X.spatdiv);
 
 
-var lastset = '', lastmarch = '', lastinst = '', lastbox = '', lastnum = '';
+var lastset = '', lastmarch = '', lastinst = '', lastbox = '', lastnum = '', lastcol = '', lasttexture;
 // Check that the various settings are unchanged, or rebuild as needed if not
 // Could be done with get/set properties but I think this is a bit easier.
 // This will do almost all preparation work at first call.
@@ -85,6 +88,16 @@ function beforeRender(renderer, scene, camera) {
         spatinit();
         fillinit();
     }
+    if (X.marchtexture !== lasttexture) {
+        marchmatgen();
+        lasttexture = X.marchtexture;
+    }
+    const ts = [X.trackStyle].join(',');
+    if (ts !== lastcol) {
+        fillinit();
+        marchinit();
+        lastcol = ts;
+    }
     const num = [X.xnum, X.ynum, X.znum, X.yinz, X.threeShader].join(',');
     if (num !== lastnum) {
         fillinit();
@@ -95,7 +108,7 @@ function beforeRender(renderer, scene, camera) {
     const march = [X.trivmarch].join(',');
     if (lastmarch !== march) {
         lastmarch = march;
-        marchmat = marchmatgen();
+        marchmatgen();
         marchmesh.material = marchmat;
     }
     const inst = [X.instancing].join(',');
@@ -111,6 +124,7 @@ function beforeRender(renderer, scene, camera) {
     }
 
     boxMarchUniforms.projectionMatrix.value = camera.projectionMatrix;
+    boxMarchUniforms.showTriangles.value = X.showTriangles;
 
     marchmesh.material.wireframe = X.dowire;
     setinfluence();
@@ -179,7 +193,6 @@ const float tol = 0.000;    // tolerance
 float getmu(float isol, float valp1, float valp2) {
     float mu = (isol - valp1) / (valp2 - valp1);
     // if (mu < -tol || mu > 1.+tol) {
-    //     zzz = vec3(0,0,1);
     //     mu = 770.5;                    // exaggerate so it really shows the error
     // } // till working
   return mu;
@@ -194,9 +207,9 @@ codebits.sphereInput = () => {
 
 codebits.compnorm = glsl`// codebits.compnorm compute normal at 0,0,0 corner of box, xi integer
 vec3 compNormi(float xi, float yi, float zi) {
-    float dx = flook(xi+1., yi, zi) - flook(xi-1., yi, zi);
-    float dy = flook(xi, yi+1., zi) - flook(xi, yi-1., zi);
-    float dz = flook(xi, yi, zi+1.) - flook(xi, yi, zi-1.);
+    float dx = flook(xi+1., yi, zi).w - flook(xi-1., yi, zi).w;
+    float dy = flook(xi, yi+1., zi).w - flook(xi, yi-1., zi).w;
+    float dz = flook(xi, yi, zi+1.).w - flook(xi, yi, zi-1.).w;
     // if we allow (common) 0,0,0 case through then NaN can spread
     // eg r = vec4(compNormi(???), 1.) will pollute r.w
     if (dx == 0. && dy == 0. && dz == 0.) return vec3(0.199,0.299,0.399);
@@ -258,8 +271,8 @@ vec4 look(float xi, float yi, float zi, sampler2D rt) {                    // ra
     return texture2D(rt, ll);
 
 }
-float flook(float xi, float yi, float zi) {                    // range 0 .. numv etc
-    return look(xi, yi, zi, fillrt).x;
+vec4 flook(float xi, float yi, float zi) {                    // range 0 .. numv etc
+    return look(xi, yi, zi, fillrt);
 }
 
 
@@ -271,7 +284,7 @@ vec4 boxf(float xi, float yi, float zi) {                    // integer range 0 
 // codebits.lookup`
 
 codebits.setfxxx = glsl`// codebits.setfxxx: compute values (by lookup)
-float
+vec4
     f000 = flook(xi, yi, zi),
     f100 = flook(xi+1., yi, zi),
     f010 = flook(xi, yi+1., zi),
@@ -326,7 +339,31 @@ out highp vec4 pc_fragColor;
 #define gl_FragColor pc_fragColor
 `;
 
+codebits.track = () => glsl`// codbits.track
+#ifndef trackStyle
+    #define trackNone 0
+    #define trackColor 10
+    #define trackId1 1
+    #define trackId2 2
+    #define trackStyle ${X.trackStyle}
+    #if trackStyle == trackColor
+        #define Track vec3
+        vec3 track = vec3(0,0,0);
+    #elif trackStyle == trackId1
+        #define Track vec2
+        vec2 track = vec2(-1,0);     // id, val
+        // #define trackId track.x
+        #define trackV track.y
+    #else
+        #define Track float // unused
+        float track = 0.;
+    #endif
+#endif
+//codebits.track`
+
 codebits.getpart = glsl`//codebits.getpart unwind integer value 0..b-1 from a packed integer a; reduce a
+#ifndef _GETPART
+#define _GETPART
 float getpart(inout float a, float b) {
     float t = floor(a/b);
     float r = a - t*b;
@@ -342,12 +379,14 @@ float getpart(inout int a, int b) {
 float getpart(inout int a, float b) {
     return getpart(a, int(b));
 }
+#endif
 // codebits.getpart`
+
 } // end codebitsinit
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // code for marching cubes pass
-var marchgeom, marchmat, marchvert, marchfrag, boxMarchUniforms, marchmesh, marchpoints, triTexture;
+var marchgeom, marchmat, marchmatver=0, marchvert, marchfrag, boxMarchUniforms, marchmesh, marchpoints, triTexture;
 
 me.three = marchmesh = new THREE.Mesh();    // create on construction so available at once
 marchmesh.frustumCulled = false;
@@ -371,6 +410,7 @@ boxMarchUniforms = {
     col: {value: new THREE.Vector3(1,1,1)},
     ambcol: {value: new THREE.Vector3(0.03,0.03,0.07)},
     isol: {value: isol},
+    showTriangles: {value: 0},
     projectionMatrix: {value: undefined},
     modelViewMatrix: {value: new THREE.Matrix4()},          // contents set by three.js
     fillrt: {value: undefined},
@@ -461,10 +501,16 @@ uniform float isol;
 
 // uniform sampler2D edgeTable;    // 256 x 1
 uniform sampler2D triTable;     // 256 x 16
+${codebits.track()}
 
-vec3 pos;                   // collect final output position
-varying vec3 zzz;           // collect colour
+varying vec3 pos;           // collect final output position
+varying vec3 vCol;           // collect output colour
 varying vec3 norm;          // collect normal
+varying vec3 whichVert;     // used for Id
+#if trackStyle == trackId1
+    varying vec3 whichId;       // if vort verts 1,2,3
+    varying vec3 whichF;        // strength at that point
+#endif
 
 #define NaN -9999999.9        // sqrt for 'real' NaN, no noticable performance difference
 vec3 NaN3 = vec3(NaN, NaN, NaN);
@@ -482,12 +528,25 @@ vec3 up1, up2;     // grid coordinates for ends and step between them, set by VI
 // When VIntG actually did the work (even under conditional)
 // it seems the compiler forced uniform flow and performed unnecessary lookups.
 // compute the intersection point on general line, step gives line direction
+// varying vec3 vCol;
 void VIntReal() {
-    float mu = getmu(isol, flook(up1.x, up1.y, up1.z), flook(up2.x, up2.y, up2.z));
+    vec4 trackfa = flook(up1.x, up1.y, up1.z), trackfb = flook(up2.x, up2.y, up2.z);
+    float mu = getmu(isol, trackfa.w, trackfb.w);
     pos = up1 + (up2 - up1) * mu;               // box coords
     pos = pos/numv.x * 2. - 1.;                 // -1..1 coords
     vec3 na = compNorm(up1), nb = compNorm(up2);
     norm = na * (1.-mu) + nb * mu;
+    #if trackStyle == trackColor
+        vCol = trackfa.rgb * (1.-mu) + trackfb.rgb * mu;
+    #elif trackStyle == trackId1
+        vCol = ((isol-trackfa.y) * (1.-mu) > (isol-trackfb.y) * mu ? trackfa : trackfb).rgb;
+        // vCol = ((isol-trackfa.y) > (isol-trackfb.y) ? trackfa : trackfb).rgb;
+        // vCol = (trackfa.y > trackfb.y ? trackfa : trackfb).rgb;
+        // vCol = (mu < 0.5 ? trackfa : trackfb).rgb;
+        // vCol = trackfa.rgb;
+    #else
+        vCol = vec3(1);
+    #endif
 }
 
 // save details of ends of edge, ready to compute intersection point
@@ -507,21 +566,20 @@ attribute float instanceID;
 var marchvertCore = glsl` // marchvertCore, core work of computing positions
     ${X.trivmarch ? '' : '// '} gl_Position = vec4(9999, 9999, 9999, 1); return;  // trivial version
 
-    zzz = vec3(1,1,1);    // unless set otherwise
     pos = NaN3;
     gl_Position = BAD4;                // till proved otherwise
 
     // ~~~~~~~~~~~~~~~~~~~~~
     // first stage, sort out exactly which voxel and voxel index is being worked on
     // varies depending on use of instancing and vertexid
-    float xi, yi, zi, vk;
+    float xi, yi, zi, ik;              // ik is 0..14, integer key to vertex
     #if (${isWebGL2 ? '1==1' : '1==0'})
         #if (${instancing ? '1==1' : '1==0'})
             int q = gl_InstanceID;
-            vk = float(gl_VertexID) / 16. + 1./32.;
+            ik = float(gl_VertexID);
         #else
             int q = gl_VertexID;
-            vk = getpart(q, ${3*maxt}) / 16. + 1./32.;
+            ik = getpart(q, ${3*maxt});
         #endif
         zi = getpart(q, ${znum-1});
         yi = getpart(q, ${ynum-1});
@@ -532,16 +590,16 @@ var marchvertCore = glsl` // marchvertCore, core work of computing positions
             zi = getpart(q, ${znum-1});
             yi = getpart(q, ${ynum-1});
             xi = getpart(q, ${xnum-1});
-            vk = position.z / 16. + 1./32.;
+            ik = position.z;
         #else
             xi = position.x;
             yi = position.y;
             float fpx = position.z / 16.;
             zi = floor(fpx);
-            vk = fpx - zi + 1./32.;    // key into which vertex to compute, 0/16..14/16 + 1/32.
+            ik = (fpx - zi) * 16.;      // todo, simplify this bit
         #endif
     #endif
-    zzz = vec3(xi,yi,zi)/nump;
+    float vk = ik / 16. + 1./32.; //  vk is key into which vertex to compute, 0/16..14/16 + 1/32.
 
     // ~~~~~~~~
     // now we know the vertex find the key and other information precomputed by the box phase
@@ -596,6 +654,20 @@ var marchvertCore = glsl` // marchvertCore, core work of computing positions
     norm = -mat3(modelViewMatrix) * normalize(norm);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.);
     gl_PointSize = 1.;
+
+    // so fragement shader can find where in triangle, and reconstruct corner ids
+    float en = mod(ik, 3.);         // which vertex, 0,1,2
+    if (en < 0.5) {
+        whichVert = vec3(1,0,0);
+    } else if (en < 1.5) {
+        whichVert = vec3(0,1,0);
+    } else {
+        whichVert = vec3(0,0,1);
+    }
+    #if trackStyle == trackId1
+        whichId = whichVert * vCol.x;
+        whichF = whichVert * vCol.y;
+    #endif
 // end of marchvertCore
 `
 
@@ -604,10 +676,12 @@ glsl`${codebits.fragpre}
 // marchfrag
 precision highp float;
 
-varying vec3 zzz;
 varying vec3 norm;
+varying vec3 vCol;
+
 uniform vec3 col;
 uniform vec3 ambcol;
+// uniform float showTriangles;
 const vec3 light1 = normalize(vec3(1,1,1)) * 0.7;
 const vec3 light2 = normalize(vec3(-1,0,1)) * 0.1;
 const vec3 eye = vec3(0,0,3);
@@ -615,16 +689,17 @@ const vec3 eye = vec3(0,0,3);
 void main() {               // marchfragmain
     vec3 nn = normalize(norm);
     float k = max(dot(nn, light1), 0.) + max(dot(nn, light2), 0.);
-    gl_FragColor = (vec4(zzz*col * k,1));
+    gl_FragColor = (vec4(col*vCol * k,1));  // accept vCol interesting colours, and col for wire
     gl_FragColor.xyz += ambcol;
     gl_FragColor.xyz = (gl_FragColor.xyz);
 }
 // end marchfrag`;
+
 // X.threeShader = false;
     if (!X.threeShader) {
         marchvert =
             `${marchvertPre}
-            void main() {
+            void main() {       // marchvertmain trivial shader
                 ${marchvertCore}
             }`;
         marchmat = new THREE.RawShaderMaterial({
@@ -632,11 +707,11 @@ void main() {               // marchfragmain
             vertexShader: marchvert,
             uniforms: boxMarchUniforms
         });
+        // marchmat.defines = {qq: 99}; // defines breaks shader in webgl2 as it gets before #version 300 es
     } else {
         marchmat = new THREE.MeshStandardMaterial();
         marchmat.onBeforeCompile = shader => {
             marchmat.xshader = shader;  // for debug
-            Object.assign(shader.uniforms, boxMarchUniforms);
 
             // marchvertPre set up for standalone not three material
             // needs slight patching (may replace with cleaner mechanism?)
@@ -646,15 +721,66 @@ void main() {               // marchfragmain
             shader.vertexShader = marchvertPre + '\n' + shader.vertexShader;
 
             // marchvertCore tailored for fitting in with three shader
-            marchvertCore += `
+            const marchvertCoreX = `${marchvertCore}
             // transformed = (r * scaleFactor) * rotpos + ppos;  // transformed has modelMatrix
             vec4 mvPosition = viewMatrix * vec4( transformed, 1.0 ); // needed if no light?
             vNormal = norm;
             `
 
-            const toreplace = '#include <project_vertex>'
-            shader.vertexShader = shader.vertexShader.replace(toreplace, marchvertCore);
+            const patch = (s, k, toadd) => s.replace(k, toadd);
+            const patchBefore = (s, k, toadd) => s.replace(k, toadd + '\n' + k );
+            const patchAfter = (s, k, toadd) => s.replace(k, k + '\n' + toadd);
+
+            const marchfragcol = `
+            // collect rgb according to tracking rules
+            #if trackStyle == trackColor    // track colour as set in original spere array w field
+                diffuseColor.rgb = vCol;
+            #elif trackStyle == trackId1
+                // find nest trackId, reconstruct ids and consider different cases
+                // all equal whole triangle is same id
+                // two equal, divide triangle into 2 by single line between edge midpoints
+                // all different, divide triangle into 3 by lines from midpoints to centre
+                // trackId = vCol.x;          // track id, x is id, y is strength for that id, choose id based random colour
+                vec3 ids = floor(whichId / whichVert + 0.5);    // vertex ids restored from 'distortion' in filling
+                vec3 fs = whichF / whichVert;                   // force strengths at the corners
+                vec3 f =  whichVert * max(fs - 0.0, 0.);        // force here
+                trackId =
+                    ids.y == ids.z ?                        // 2-way xy equal, also covers 1-way xyz equal
+                        f.x > f.y + f.z ? ids.x : ids.y :
+                    ids.z == ids.x ?                        // 2-way zx equal
+                        f.y > f.z + f.x ? ids.y : ids.z :
+                    ids.x == ids.y ?                        // 2-way xy equal
+                        f.z > f.x + f.y ? ids.z : ids.x :
+                    f.x > f.y && f.x > f.z ? ids.x :        // 3-way x strongest
+                    f.y > f.x && f.y > f.z ? ids.y :        // 3-way y strongest
+                    ids.z;                                  // 3-way z strongest (or equal)
+
+                diffuseColor.rgb = mod(trackId * vec3(234.66, 77.8, 9968.7), 255.)/255.;
+
+            // trackNone leave to standard three.js material colour
+            #endif
+            if (showTriangles > 0. && whichVert.x * whichVert.y * whichVert.z < showTriangles) diffuseColor.rgb = vec3(1);
+            `
+
+            shader.vertexShader = patch(shader.vertexShader, '#include <project_vertex>', marchvertCoreX);
+
+            shader.fragmentShader = patchBefore(shader.fragmentShader, '#include <common>', codebits.track());
+            shader.fragmentShader = patchBefore(shader.fragmentShader, 'void main() {', `
+                varying vec3 pos, vCol, whichVert, whichId, whichF;
+                float trackId;
+                uniform float showTriangles;
+            `);
+            shader.fragmentShader = patchBefore(shader.fragmentShader, '#include <lights_physical_fragment>', marchfragcol);
+
+            if (X.marchtexture) shader.fragmentShader = X.marchtexture(shader.fragmentShader, boxMarchUniforms, X); // modifies shader and adds to uniforms
+            Object.assign(shader.uniforms, boxMarchUniforms);
+
         }
+        // defines needed here to resolve three.js cahce conflict
+        // https://github.com/mrdoob/three.js/issues/19377
+        // defines could be used to replace ${xnum} etc with plain xnum
+        // but for the moment at least using .define breaks our raw shader in webgl2
+        marchmat.defines = {xnum, ynum, znum, XtrackStyle: X.trackStyle, ver: marchmatver++};
     }
 
     marchmat.name = 'marchmat';
@@ -1109,7 +1235,6 @@ uniform float testfr;
 // nb significant performance difference between 'abs(r) * r' and 'sign(r) * r * r'
 float sp(float x) { float r = sin(x); return abs(r) * r; }
 
-#define fillf fillspatial
 #define npart ${npart}.
 const float spatn = ${spatn}.;
 const float spatdivsx = ${spatdivs.x}.;
@@ -1121,8 +1246,14 @@ float divk;
 
 ${shapefun}
 
+${codebits.getpart}
+${codebits.track()}
+
+
+
 // compute potential from A (=24) spheres, using the bit flags in 'key'
 // to avoid lookup/compute for inactive spheres
+// return field potential, side effect updates track
 float fillspatiali(float ii, float key, float x, float y, float z) {
     float t = 0.;
     for (float i = 0.; i < ${A}.; i++) {
@@ -1135,15 +1266,24 @@ float fillspatiali(float ii, float key, float x, float y, float z) {
             float yy = y - d.y;
             float zz = z - d.z;
             float d2 = xx*xx + yy*yy + zz*zz;
-            t += shape(d2);
+            float tme = shape(d2);
+            t += tme;
+            #if trackStyle == trackColor
+                track += tme * vec3(getpart(d.w, 256.)/255., getpart(d.w, 256.)/255., getpart(d.w, 256.)/255.);
+            #elif trackStyle == trackId1
+                if (tme > trackV) {
+                    track = vec2(i, tme);
+                    // track = vec2(i, max(2. - sqrt(d2/rad2), 0.));
+                }
+            #endif
         }
     }
     return t;
 }
 
+vec3 div;
 // compute potential from all spheres
 // work in blocks of A*4 (=96) spheres, using the bit flags in 4 float channel 'key' values
-vec3 div;
 float fillspatial(float x, float y, float z) {
     float t = 0.;
     // spatdata holds x=> lowi, x faster moving and y=> z, y faster moving
@@ -1160,7 +1300,6 @@ float fillspatial(float x, float y, float z) {
     return t;
 }
 
-${codebits.getpart}
 void main() {           // fill fragment shader fillfragmain
     ${codebits.getxyz()}    // get xi yi zi from 2d position
 
@@ -1170,8 +1309,14 @@ void main() {           // fill fragment shader fillfragmain
 
     div = floor(vec3(xi,yi,zi) / numv * spatdivs);
 
-    float v0 = fillf(x, y, z);
-    gl_FragColor = vec4(v0,v0,v0,1);
+    float v0 = fillspatial(x, y, z);
+    #if trackStyle == trackId1
+        gl_FragColor = vec4(track, -999, v0);
+    #elif trackStyle == trackColor
+        gl_FragColor = vec4(track/v0, v0);
+    #else
+        gl_FragColor = vec4(1,1,1, v0);
+    #endif
 }
 `
 
@@ -1262,7 +1407,7 @@ void main() {   // box fragment boxfragmain
     ${codebits.getxyz()}    // get xyz from 2d
 
     ${codebits.setfxxx}  // set f000 etc
-    float key = keyi(f000, f100, f010, f110, f001, f101, f011, f111, isol);
+    float key = keyi(f000.w, f100.w, f010.w, f110.w, f001.w, f101.w, f011.w, f111.w, isol);
     if (key == 0. || key == 255.) { // all inside or all outside
         key = -1.;
     }

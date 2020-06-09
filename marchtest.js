@@ -7,7 +7,7 @@ var queryloadpromise, trywebgl2=true, gldebug, Gldebug, location;
 
 // general initialization of test scope
 var camera, renderer, canvas, rca, controls, stats,
-framenum=0, X, marching, isWebGL2, scene, searchEval, lightGroup;
+framenum=0, X, marching, isWebGL2, scene, searchEval, light, lighta, lightGroup;
 function init() {
     console.clear();
     console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~');
@@ -67,8 +67,9 @@ function init() {
     scene = new THREE.Scene();
     lightGroup = new THREE.Group();
     scene.add(lightGroup);
-    const lighta = new THREE.AmbientLight( 0xffffff, 0.1 ); lightGroup.add(lighta);
-    const light = new THREE.DirectionalLight(new THREE.Vector3(0,5, 0.5, 1), 1); lightGroup.add(light)
+    lighta = new THREE.AmbientLight( 0xffffff, 0.1 ); lightGroup.add(lighta);
+    light = new THREE.DirectionalLight(THREE.Color.NAMES.white, 1); lightGroup.add(light)
+    light.position.set(0.6, 0.3, 1);
 
 
     // scene = new THREE.Scene();
@@ -153,7 +154,7 @@ function filldata(t = 1234, k = window.fillk) {
         data[ii++] = k*sp(i + t*(1.3 + 2.1 * iin));
         data[ii++] = k*sp(i*1.3 + t*(1.9 + iin));
         data[ii++] = k*sp(i*1.7 + t*(2.2 + 0.2 * iin));
-        data[ii++] = 1;
+        data[ii++] = ii * 172737 % 16777216;
     }
     marching.updateData(datatexture, X.sphereScale);
     function sp(x) { var r = Math.sin(x); return Math.abs(r) * r; }
@@ -172,7 +173,7 @@ function fillgrid() {
                 data[ii++] = 1.5 * (x/n3 - 0.5);
                 data[ii++] = 1.5 * (y/n3 - 0.5);
                 data[ii++] = 1.5 * (z/n3 - 0.5);
-                data[ii++] = 1;
+                data[ii++] = ii * 172737 % 16777216;
             }
         }
     }
@@ -233,10 +234,18 @@ window.onload = () => {
     trivmarch<input type="checkbox" onclick="X.trivmarch=this.checked"></button>
     instancing<input type="checkbox" onclick="X.instancing=this.checked" checked="1"></button>
     useboxnorm<input type="checkbox" onclick="X.useboxnorm=this.checked" checked="1"></button>
-    threeShader<input type="checkbox" onclick="X.threeShader=this.checked" checked="1"></button>
     <br>
-    loops<input type="range" min="0" max="10" value="1" step="1"
-        oninput="X.loops=this.value"/>
+    track: none<input type="radio" name="track" onclick="X.trackStyle='trackNone'"></button>
+    Color<input type="radio" name="track" onclick="X.trackStyle='trackColor'" checked="1"></button>
+    Id1<input type="radio" name="track" onclick="X.trackStyle='trackId1'"></button>
+    <br>
+    shader: trivial<input type="radio" name="shader" onclick="X.threeShader=0"></button>
+    three<input type="radio" name="shader" onclick="X.threeShader=1; X.marchtexture=0"></button>
+    organic<input type="radio" name="shader" onclick="X.threeShader=1; X.marchtexture=window.marchtexture" checked="1"></button>
+    <br>
+    showTriangles<input type="range" min="0" max="0.01" value="0" step="0.001" oninput="X.showTriangles=this.value"/>
+    <br>
+    loops<input type="range" min="0" max="10" value="1" step="1" oninput="X.loops=this.value"/>
     <br>
 
     <textarea id="code">// extra code here</textarea>
