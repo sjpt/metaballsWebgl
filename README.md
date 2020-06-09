@@ -46,6 +46,20 @@ A structure `marching.X` provides more control.
     yinz: 0,            // manual override value used to split y in 3d/2d lookup, needed where xnum*ynum > maxtexsize
     threeShader: true   // true to use customized three shader, false for trivial shading
 ```
+## tracking
+### Colours
+Colours may be added as a fourth channel in the input sphere definition. They are tracked through the system, being blended as apporpriate. The blending tends to obscure computational inaccuracies arising from the gridded nature of the algorithm.
+
+### ids
+The id (sphere humber in the input array) can be tracked through the system, and the result used for colouring or to control other shader attributes. In the default test setup different ids are mapped to random different colours.
+
+Blending is not appropriate for ids. The system attempts to keep track of the closest (most influential) sphere at any point. The nature of the gridding means that this does not give clean edges between the id regions.
+
+## shaders
+The system provides a very basic shader, or can operate by inserting necessary patches to the three standard material.
+
+Additionally, the user can provide additional patches. For example we have a patch that provides 3d texturing (along the lines of various generations of Organic Art). This is not currently publically available.
+
 ## algorithm
 metaballsWebgl has been derived from standard marching cubes, with several optimizations. The optimizations are mainly designed to mitigate the inherent inefficiencies of GPU coding in Webgl.
 
@@ -65,20 +79,6 @@ The spatial subdivision pass outputs a bitmap for each super-voxel, indicating w
 The final marching phase generates 5 triangles for every voxel. Most voxels have no surface and all the triangles are 'dummy' triangles with three 'dummy' vertices; almost none of the voxels use all 5 triangles. The shaders are written to minimize time spent handling dummy vertices and triangles; the purpose of the voxel relevance pass is to assist that. Nevertheless the intrinsic overhead (outside the shaders) of handling vertices and triangles meanss that nearly 50% of the gpu time goes into handling these dummy triangles.
 
 The optimizations mean that the flow is highly non-uniform, and likely to behave very poorly on older gpus, and gpus in many tablets and phones.
-
-## tracking
-### Colours
-Colours may be added as a fourth channel in the input sphere definition. They are tracked through the system, being blended as apporpriate. The blending tends to obscure computational inaccuracies arising from the gridded nature of the algorithm.
-
-### ids
-The id (sphere humber in the input array) can be tracked through the system, and the result used for colouring or to control other shader attributes. In the default test setup different ids are mapped to random different colours.
-
-Blending is not appropriate for ids. The system attempts to keep track of the closest (most influential) sphere at any point. The nature of the gridding means that this does not give clean edges between the id regions.
-
-## shaders
-The system provides a very basic shader, or can operate by inserting necessary patches to the three standard material.
-
-Additionally, the user can provide additional patches. For example we have a patch that provides 3d texturing (along the lines of various generations of Organic Art). This is not currently publically available.
 
 ### three.js note
 three.js is an excellent framework, but we have had some issues with this project, which is somewhat outside the normal use of three.js.
