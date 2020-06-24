@@ -3,13 +3,18 @@
 **metaballsWebgl** is a GPU implemenmtation of metaballs for running under WebGL or WebGL2, using optimized marching cubes (see below).
 It uses three.js.
 
-* Input is a texture containing sphere positions, and optionally colours.
+* Input is a generally texture containing sphere positions, and optionally colours.
 * Output is a rendered image as part of a three.js scene.
 
 It is designed to be fast for dynamic data; for example it can handle 10,000 spheres at a grid resolution of 100x100x100 at 60 fps using 33% of a 1080 gpu.
 It recomputes everything every render, so is inefficient for static data.
 
-A test case can be viewed at https://sjpt.github.io/marchtestlocal.html
+A test case can be viewed at https://sjpt.github.io/metaballsWebgl/marchtestlocal.html
+
+The implicit function marching cubes part can be used indepenedently from the metaball code.
+Check the isFun checkbox and choose from a set of sample functions (modified from taken from http://mikolalysenko.github.io/Isosurface/).
+You can also type in your own function.
+We intend to add sliders to take advatage of the real-time aspect of these functions.
 
 ## basic usage
 ```javascript
