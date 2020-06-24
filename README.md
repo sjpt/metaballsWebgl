@@ -64,10 +64,10 @@ Additionally, the user can provide additional patches. For example we have a pat
 metaballsWebgl has been derived from standard marching cubes, with several optimizations. The optimizations are mainly designed to mitigate the inherent inefficiencies of GPU coding in Webgl.
 
 It operates in four passes:
-1. spatial subdivision determines which spheres are active in which super-voxel
-2. grid potential fill, fills the voxel corners with potential data
-3. voxel relevance pass, flag which voxels are likely to contribute, and how
-4. marching cubes pass, generate the marching cubes triangles
+1. **spatial subdivision** determines which spheres are active in which super-voxel
+2. **grid potential fill**, fills the voxel corners with potential data, and associated colour/id data if relevant.
+3. **voxel relevance** pass, flag which voxels are likely to contribute, and how
+4. **marching cubes** pass, generate the marching cubes triangles
 
 The first three passes are rendered using three.js onBeforeCompile(),
 the final pass as part of the 'real' three scene.
@@ -90,3 +90,14 @@ three.js does not currently support this; it requires a position vertex attribut
 
 https://github.com/mrdoob/three.js/issues/19430
 https://github.com/mrdoob/three.js/pull/19451
+
+You can get round that by preparing a `position` attribute in javascript to help three.js identify the number of vertices. However, if you do not use that attribute within the shader recent versions of three.js detect this, ignore the attribute, and do not know what size to use.
+
+#### corruption of NaN values
+Creating three.js vector objects with NaN values does not respect the NaN's but corrupts them to 0. eg `new THREE.Vector3(NaN).x` gives 0.
+
+Some of this code can use NaN values in the shaders and intermediate texture buffers to 'kill' redundant trianges; future versions may well rely on them.
+Reading back (e.g. for debug) such buffers with NaN values works OK, but organising those as arrays of three.js vectors corrupts them.
+
+This was easily fixed in our code by replacing `new THREE.Vector3(x,y,z)` with `new THREE.Vector3().set(x,y,z)`.
+
