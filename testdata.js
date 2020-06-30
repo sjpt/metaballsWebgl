@@ -12,26 +12,73 @@ function createTestData() {
     }
   }
 
-//   function makeVolume(dims, f) {
-//     return memoize(function() {
-//       var res = new Array(3);
-//       for(var i=0; i<3; ++i) {
-//         res[i] = 2 + Math.ceil((dims[i][1] - dims[i][0]) / dims[i][2]);
-//       }
-//       var volume = new Float32Array(res[0] * res[1] * res[2])
-//         , n = 0;
-//       for(var k=0, z=dims[2][0]-dims[2][2]; k<res[2]; ++k, z+=dims[2][2])
-//       for(var j=0, y=dims[1][0]-dims[1][2]; j<res[1]; ++j, y+=dims[1][2])
-//       for(var i=0, x=dims[0][0]-dims[0][2]; i<res[0]; ++i, x+=dims[0][2], ++n) {
-//         volume[n] = f(x,y,z);
-//       }
-//       return {data: volume, dims:res};
-//     });
-//   }
-
     function makeVolume(dims, f) {
         return {dims, f};
     }
+
+    result.metaballs = null;
+
+    result.fano = makeVolume(
+      [[-2, 2, 0.05],
+        [-2, 2, 0.05],
+        [-2, 2, 0.05]],
+        function(x,y,z) {
+    const b000 = -0.1296938094028164;
+    const b100 = -0.12559320317105938;
+    const b010 = -1.0328623458582733;
+    const b001 = 2.5255575472290266;
+    const b110 = 2.4060330675140764;
+    const b101 = 10.0;
+    const b011 = 1.2300251035770497;
+    const b210 = 0.5731475086982323;
+    const b120 = 0.8879230087385453;
+    const b201 = 2.3413317237583797;
+    const b102 = 0.29802930904302305;
+    const b021 = 1.4619136622627633;
+    const b012 = 0.8846581412111914;
+    const b111 = 1.3399230191726863;
+    const b030 = 10.0;
+    const b003 = 10.0;
+    const b200 = 1.8674935459024677;
+    const b020 = 8.961174069275634;
+    const b002 = 10.0;
+    const b300 = 2.6837624713897066;
+    const w = 1.0;
+
+    let r = 0.0;
+    r += b000 * w * w * w;
+    r += b001 * z * w * w;
+    r += b002 * z * z * w;
+    r += b003 * z * z * z;
+
+    r += b010 * y * w * w;
+    r += b011 * y * z * w;
+    r += b012 * y * z * z;
+
+    r += b020 * y * y * w;
+    r += b021 * y * y * z;
+
+    r += b030 * y * y * y;
+
+    r += b100 * x * w * w;
+    r += b101 * x * z * w;
+    r += b102 * x * z * z;
+
+    r += b110 * x * y * w;
+    r += b111 * x * y * z;
+
+    r += b120 * x * y * y;
+
+    r += b200 * x * x * w;
+    r += b201 * x * x * z;
+
+    r += b210 * x * x * y;
+
+    r += b300 * x * x * x;
+
+    return r;
+  });
+
 
   result.Sphere = makeVolume(
     [[-1.0, 1.0, 0.25],

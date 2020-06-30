@@ -11,9 +11,9 @@ It recomputes everything every render, so is inefficient for static data.
 
 A test case can be viewed at https://sjpt.github.io/metaballsWebgl/marchtestlocal.html
 
-The implicit function marching cubes part can be used indepenedently from the metaball code.
-Check the isFun checkbox and choose from a set of sample functions (modified from taken from http://mikolalysenko.github.io/Isosurface/).
-You can also type in your own function.
+The implicit function marching cubes part can be used independently from the metaball code.
+Choose function from the dropdown (modified from taken from http://mikolalysenko.github.io/Isosurface/).
+You can also type in your own function using the code box.
 We intend to add sliders to take advatage of the real-time aspect of these functions.
 
 ## basic usage

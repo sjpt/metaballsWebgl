@@ -323,68 +323,6 @@ vec4 look(float xi, float yi, float zi, sampler2D rt) {                    // ra
 
 #define useFun ${+X.useFun}
 #if useFun
-#define b000 -0.1296938094028164
-#define b100 -0.12559320317105938
-#define b010 -1.0328623458582733
-#define b001 2.5255575472290266
-#define b110 2.4060330675140764
-#define b101 10.
-#define b011 1.2300251035770497
-#define b210 0.5731475086982323
-#define b120 0.8879230087385453
-#define b201 2.3413317237583797
-#define b102 0.29802930904302305
-#define b021 1.4619136622627633
-#define b012 0.8846581412111914
-#define b111 1.3399230191726863
-#define b030 10.
-#define b003 10.
-#define b200 1.8674935459024677
-#define b020 8.961174069275634
-#define b002 10.
-#define b300 2.6837624713897066
-
-  float fanoeval(vec3 pointa) {
-	vec4 point = vec4(pointa, 1.0); //
-
-	float X = point.x;
-	float Y = point.y;
-	float Z = point.z;
-	float W = point.w;
-
-	float r = 0.;
-	r += b000 * W * W * W;
-	r += b001 * Z * W * W;
-	r += b002 * Z * Z * W;
-	r += b003 * Z * Z * Z;
-
-	r += b010 * Y * W * W;
-	r += b011 * Y * Z * W;
-	r += b012 * Y * Z * Z;
-
-	r += b020 * Y * Y * W;
-	r += b021 * Y * Y * Z;
-
-	r += b030 * Y * Y * Y;
-
-	r += b100 * X * W * W;
-	r += b101 * X * Z * W;
-	r += b102 * X * Z * Z;
-
-	r += b110 * X * Y * W;
-	r += b111 * X * Y * Z;
-
-	r += b120 * X * Y * Y;
-
-	r += b200 * X * X * W;
-	r += b201 * X * X * Z;
-
-	r += b210 * X * X * Y;
-
-	r += b300 * X * X * X;
-
-	return r;
-}
 
 uniform float funRange;
 vec4 fillLook(float xi, float yi, float zi) {                    // range 0 .. numv etc
@@ -392,24 +330,7 @@ vec4 fillLook(float xi, float yi, float zi) {                    // range 0 .. n
     p *= funRange;
     float x = p.x, y = p.y, z = p.z;
     float v;
-    // // v = x*x + y*y + z*z;
-
-    // //v = pow(x,4.) + pow(y,4.) + pow(z,4.) - 1.5 * (x*x  + y*y + z*z) + 1.;
-    // //v = -v + 1.;
-
-    // v = 25. * (pow(x,3.)*(y+z) + pow(y,3.)*(x+z) + pow(z,3.)*(x+y)) +
-    //     50. * (x*x*y*y + x*x*z*z + y*y*z*z) -
-    //     125. * (x*x*y*z + y*y*x*z+z*z*x*y) +
-    //     60.*x*y*z -
-    //     4.*(x*y+x*z+y*z);
-
-    // v = sin(x + sin(2.3*y)) + sin(y + sin(3.7*z)) + sin(z + sin(4.1*x));
-
-    #if (${+(X.funcode !== '')})
-        ${X.funcode}
-    #else
-        v = fanoeval(p);
-    #endif
+    ${X.funcode}
 
     vec3 fcol = vec3(0.5, 0.7, 0.9);
     return vec4(fcol, v);

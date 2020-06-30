@@ -92,6 +92,7 @@ function marchTestInit() {
         }), 1000);
     }
     makefuns();
+    window.funcode.addEventListener('keyup', funkeyup);
 }
 
 // make dropdown list from available functions
@@ -106,20 +107,30 @@ function makefuns() {
 
 // process function change, inclduing basic javascript=>glsl conversion
 function funlistchange(v) {
+    if (v === 'metaballs') {
+        window.useFun.checked = X.useFun = false;
+        ds();
+        return;
+    }
     const t = tests[v], d = t.dims;
     let sf = t.f.toString();
     sf = sf.replace('function(x,y,z) {', '');
     sf = sf.replace('return', 'v = ');
-    sf = sf.replace(/([^\.\d])(\d+)([^\.\d])/g, '$1$2.$3');
+    sf = sf.replace(/([^\.\da-z])(\d+)([^\.\d])/g, '$1$2.$3');
+    //sf = sf.replace('/*<<', '/*<</')
+    //sf = sf.replace('>>*/', '/>>*/')
+    sf = sf.replace(/const/g, 'const float');
+    sf = sf.replace(/let/g, 'float');
     sf = sf.substring(0, sf.length-1);
     sf = sf.split('Math.').join('');
     sf = sf.trim();
 
-    window.funcode.value = sf;
+    X.funcode = window.funcode.value = sf;
     const l = Math.min(d[0][0], d[1][0], d[2][0]);
     const h = Math.max(d[0][1], d[1][1], d[2][1]);
+    window.useFun.checked = X.useFun = true;
     X.funRange = window.funRange.value = Math.max(-l, h) * X.xnum/(X.xnum-2);
-    X.isol = window.isol.value = 0;
+    ds();
 }
 
 
@@ -140,12 +151,17 @@ function jstring(k) {
     ).split('"').join('');
 }
 
+function funkeyup(evt) {
+    const funcode = window.funcode;
+    if (evt.ctrlKey && evt.code === "Enter") X.funcode = window.funcode.value;
+}
 
 var sd = Date.now(), time = 0, speed = 0.1;
 function animate() {
     framenum++;
     try {eval(window.code.value);} catch(e){}
-    X.funcode = window.funcode.value;
+    // X.funcode = window.funcode.value;
+    window.funcode.style.background = X.funcode === window.funcode.value ? 'lightgreen' : 'lightpink';
 
     const ed = Date.now();
     time += (ed-sd) * speed /1000;
@@ -252,29 +268,39 @@ window.onload = () => {
         <p class="hhelp">number of spheres for metaballs (metaballs only)</p>
     <br>
     <span>
-        track: none<input type="radio" name="track" onclick="X.trackStyle='trackNone'"></button>
-        Color<input type="radio" name="track" onclick="X.trackStyle='trackColor'" checked="1"></button>
-        Id1<input type="radio" name="track" onclick="X.trackStyle='trackId1'"></button>
+        track: none<input type="radio" name="track" onclick="X.trackStyle='trackNone'">
+        Color<input type="radio" name="track" onclick="X.trackStyle='trackColor'" checked="1">
+        Id1<input type="radio" name="track" onclick="X.trackStyle='trackId1'">
     </span>
     <p class="hhelp">Control how information about individual spheres is tracked through the mataball code.
     <br><b>Color</b> tracks rgb, and will blend smoothly.
     <br><b>Id1</b>tracks a single ID value of 'most influential' shere.
     <br>This still causes somewhat arbitrary idges.</p>
-    <br><span>
+    <br>
     <span>speed<input type="range" min="0" max="0.5" value="0.1" step="0.01"
         oninput="speed=this.value"/></span>
         <p class="hhelp">speed of metaball movement (metaballs only)</p>
     <br>
     <h3>functions</h3>
-    <span>useFun<input type="checkbox" onclick="X.useFun=this.checked; ds()"></button></span>
-    <p class="hhelp">Use builtin function (fano) if checked, metaballs if not.
+    <span style="display: none;">useFun<input type="checkbox" id="useFun" onclick="X.useFun=this.checked; ds()"></span>
+    <p class="hhelp">Use function if checked, metaballs if not.
     <br>More flexible function settings to follow ....</p>
-    <span>doubleSide<input type="checkbox" id="UdoubleSide" onclick="X.doubleSide=this.checked"></button></span>
+    <span>doubleSide<input type="checkbox" id="UdoubleSide" onclick="X.doubleSide=this.checked"></span>
     <p class="hhelp">use doubleSided rendering (set automatically by some other options)</p>
     <br>
         <select name="funs" id="funlist" onchange="funlistchange(this.value)">
         </select>
-    <textarea id="funcode"></textarea>
+        <div class="hhelp"><h4>Select function to display</h4>
+        <b><i>metaballs</i></b> will display many metaballs according to settings above.
+        <br>This requires all four passes to create and then use the metaball potential function.
+        <br><br>Others will display selected function and use just the two marching cubes passes.</li>
+        </div>
+        <textarea id="funcode"></textarea>
+        <p class="hhelp">Write custom code here for potential function, and ctrl-Enter to submit code for use.
+        <br><b>Light green</b> background indicates code currently shown is code in use.
+        <br><b>Light pink</b> background indicates code currently shown is not code in use.
+        <br><b>Currently no feedback for invalid code either before or after hitting ctrl-Enter.</b>
+        </p>
     <br>
     <span>funRange<input type="range" min="0" max="4" value="1" step="0.001" id="funRange"
         oninput="X.funRange=this.value"/></span>
@@ -290,9 +316,9 @@ window.onload = () => {
         <p class="hhelp">resolution for process.<br>Gui only supports x, y, z the same.</p>
     <br>
     <span>
-        <b>shader:</b> trivial<input type="radio" name="shader" onclick="X.threeShader=0"></button>
-        three<input type="radio" name="shader" onclick="X.threeShader=1; X.marchtexture=0"></button>
-        organic<input type="radio" name="shader" onclick="X.threeShader=1; X.marchtexture=window.marchtexture" checked="1"></button>
+        <b>shader:</b> trivial<input type="radio" name="shader" onclick="X.threeShader=0">
+        three<input type="radio" name="shader" onclick="X.threeShader=1; X.marchtexture=0">
+        organic<input type="radio" name="shader" onclick="X.threeShader=1; X.marchtexture=window.marchtexture" checked="1">
     </span>
     <p class="hhelp">
     Choose shader style.
@@ -302,9 +328,9 @@ window.onload = () => {
     <br>Surface net only permits trivial shading for now ...
     </p>
     <br>
-    <span>suface net<input type="checkbox" onclick="X.surfnet=this.checked; ds()"></button></span>
+    <span>suface net<input type="checkbox" onclick="X.surfnet=this.checked; ds()"></span>
         <p class="hhelp">Use surfnet rather than marching cubes.></p>
-    lego<input type="checkbox" onclick="X.lego=this.checked"></button></span>
+    lego<input type="checkbox" onclick="X.lego=this.checked"></span>
         <p class="hhelp">The 'lego' options uses grid based points rather than forcing them to the surface.
         <br>For surfnet this uses the mid-points of the voxels.
         <br>For marching this uses the mid-points of the voxel edges.</p>
@@ -314,31 +340,31 @@ window.onload = () => {
     <br>
     -->
     <span>
-        exp<input type="radio" name="ff" onclick="X.funtype=2" checked="1"></button>
-        cubic<input type="radio" name="ff" onclick="X.funtype=0"></button>
-        square<input type="radio" name="ff" onclick="X.funtype=1"></button>
+        exp<input type="radio" name="ff" onclick="X.funtype=2" checked="1">
+        cubic<input type="radio" name="ff" onclick="X.funtype=0">
+        square<input type="radio" name="ff" onclick="X.funtype=1">
     </span>
         <p class="hhelp">metaball function of distance, -ve exponential, cubic, or square</p>
     <br>
-    <span>spatial<input type="checkbox" checked="1" onclick="X.renders.spat = +!!this.checked"></button></span>
+    <span>spatial<input type="checkbox" checked="1" onclick="X.renders.spat = +!!this.checked"></span>
         <p class="hhelp">Whether to perform spatial subdivision pass<br>(performance test, metaballs only)</p>
-    <span>fill<input type="checkbox" checked="1" onclick="X.renders.fill = +!!this.checked"></button></span>
+    <span>fill<input type="checkbox" checked="1" onclick="X.renders.fill = +!!this.checked"></span>
         <p class="hhelp">Whether to perform grid fill pass<br>(performance test, metaballs only)</p>
-    <span>box<input type="checkbox" checked="1" onclick="X.renders.box = +!!this.checked"></button></span>
+    <span>box<input type="checkbox" checked="1" onclick="X.renders.box = +!!this.checked"></span>
         <p class="hhelp">Whether to perform the grid prepass pass (eg compute key etc)<br>(performance test)</p>
-    <span>march<input type="checkbox" checked="1" onclick="X.doshade=this.checked"></button></span>
+    <span>march<input type="checkbox" checked="1" onclick="X.doshade=this.checked"></span>
         <p class="hhelp">Whether to perform the final marching pass
         <br>(performance test, no output it not selected)</p>
     <br>
-    <!-- wire<input type="checkbox" onclick="X.dowire=this.checked"></button> -->
-    <!-- points<input type="checkbox" onclick="X.dopoints=this.checked"></button> -->
-    <span>trivmarch<input type="checkbox" onclick="X.trivmarch=this.checked"></button></span>
+    <!-- wire<input type="checkbox" onclick="X.dowire=this.checked"> -->
+    <!-- points<input type="checkbox" onclick="X.dopoints=this.checked"> -->
+    <span>trivmarch<input type="checkbox" onclick="X.trivmarch=this.checked"></span>
         <p class="hhelp">Perform trivial final marching pass.
         <br>No output is displayed.
         <br>Checks for overhead in processing 'dummy' vertices/triangles<br>(performance test)</p>
-    <span>instancing<input type="checkbox" onclick="X.instancing=this.checked" checked="1"></button></span>
+    <span>instancing<input type="checkbox" onclick="X.instancing=this.checked" checked="1"></span>
         <p class="hhelp">whether to use instancing (performance test) </p>
-    <span>useboxnorm<input type="checkbox" onclick="X.useboxnorm=this.checked" checked="1"></button></span>
+    <span>useboxnorm<input type="checkbox" onclick="X.useboxnorm=this.checked" checked="1"></span>
         <p class="hhelp">whether to compute normals in box or march phase </p>
     <br>
     <span>spatdiv<input type="range" min="1" max="50" value="25" step="1"
