@@ -85,6 +85,11 @@ The final marching phase generates 5 triangles for every voxel. Most voxels have
 
 The optimizations mean that the flow is highly non-uniform, and likely to behave very poorly on older gpus, and gpus in many tablets and phones.
 
+### lego/minecraft
+The very helpful https://0fps.net/2012/07/12/smooth-voxel-terrain-part-2/ by Mikolaly Senko comments how surface net mesh points can be coerced to the centres of their voxel rather than finding a good surface point. This makes the smooth surface into a lego surface with only axial faces. The 'lego' option enables this.
+
+We have applied a similar idea to marching cubes. Each edge crossing is forced to the centrpoint of the voxel edge. This is not as neat as the lego. Rather than axial faces all faces have normals (A,B,C) where A,B,C are -1, 0 or +1.
+
 ### three.js note
 three.js is an excellent framework, but we have had some issues with this project, which is somewhat outside the normal use of three.js.
 
