@@ -110,6 +110,13 @@ function funlistchange(v) {
     if (v === 'metaballs') {
         window.useFun.checked = X.useFun = false;
         ds();
+        medial(false);
+        return;
+    }
+    if (v === 'medial') {
+        window.useFun.checked = X.useFun = false;
+        ds();
+        medial(true);
         return;
     }
     const t = tests[v], d = t.dims;
@@ -208,9 +215,10 @@ function filldata(t = 1234, k = window.fillk) {
     let ii = (gridSpheres) ? fillgrid() : 0;
     for (let i=0; ii<npart*4; i++) {
         let iin = i/npart;
-        data[ii++] = k*sp(i + t*(1.3 + 2.1 * iin));
-        data[ii++] = k*sp(i*1.3 + t*(1.9 + iin));
-        data[ii++] = k*sp(i*1.7 + t*(2.2 + 0.2 * iin));
+        const off = X.medialNeg > 1e10 ? 0 : i >= X.medialNeg ? -X.spatoff : X.spatoff;
+        data[ii++] = k*sp(i + t*(1.3 + 2.1 * iin)) + off;
+        data[ii++] = k*sp(i*1.3 + t*(1.9 + iin)) + off;
+        data[ii++] = k*sp(i*1.7 + t*(2.2 + 0.2 * iin)) + off;
         data[ii++] = ii * 172737 % 16777216;
     }
     marching.updateData(datatexture, X.sphereScale);
@@ -240,6 +248,30 @@ function fillgrid() {
 function ds() {
     window.UdoubleSide.checked = marching.autoDouble();
     X.isol = window.isol.value = X.useFun ? 0 : 1;
+}
+
+function medial(v) {
+    if (v) {
+        X.isol = 0;
+        X.medialNeg = X.npart/2;
+        X.medialThresh = 1e-20;
+        X.radInfluence = 3;
+        X.rad = 0.2;
+        X.doubleSide = true;
+        X.funtype = 0;              // cubic has precise 0 value
+        X.trackStyle = 'trackMedial'
+        X.spatoff = 0.1;
+        X.medialColMax = 0.03;
+    } else {
+        X.isol = 1;
+        X.medialNeg = 1e20;
+        X.medialThresh = -1e-20;
+        X.radInfluence = 2;
+        X.rad = 0.1;
+        X.doubleSide = false;
+        X.trackStyle = 'trackNone';
+        X.spatoff = 0;
+    }
 }
 
 window.onload = () => {
@@ -291,8 +323,11 @@ window.onload = () => {
         <select name="funs" id="funlist" onchange="funlistchange(this.value)">
         </select>
         <div class="hhelp"><h4>Select function to display</h4>
-        <b><i>metaballs</i></b> will display many metaballs according to settings above.
+        <b><i>metaballs</i></b> displays many metaballs according to settings above.
         <br>This requires all four passes to create and then use the metaball potential function.
+        <b><i>medial</i></b> displays medial surface according to settings above.
+        <br>This uses half the particles as positive, and half as negative, and shows the balancing surface.
+        <br>One application is to show potein docking interface (not illustrated here).
         <br><br>Others will display selected function and use just the two marching cubes passes.</li>
         </div>
         <textarea id="funcode"></textarea>

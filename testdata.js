@@ -17,6 +17,7 @@ function createTestData() {
     }
 
     result.metaballs = null;
+    result.medial = null;
 
     result.fano = makeVolume(
       [[-2, 2, 0.05],
