@@ -221,7 +221,7 @@ function filldata(t = 1234, k = window.fillk) {
         data[ii++] = k*sp(i*1.7 + t*(2.2 + 0.2 * iin)) + off;
         data[ii++] = ii * 172737 % 16777216;
     }
-    marching.updateData(datatexture, X.sphereScale);
+    marching.updateData(datatexture, X.spherePosScale);
     function sp(x) { var r = Math.sin(x); return Math.abs(r) * r; }
 }
 
@@ -319,6 +319,8 @@ window.onload = () => {
     <br>More flexible function settings to follow ....</p>
     <span>doubleSide<input type="checkbox" id="UdoubleSide" onclick="X.doubleSide=this.checked"></span>
     <p class="hhelp">use doubleSided rendering (set automatically by some other options)</p>
+    <span>rotateInside<input type="checkbox" id="UrotateInside" onclick="X.rotateInside=this.checked"></span>
+    <p class="hhelp">for doubleSide, rotate rgb on back side</p>
     <br>
         <select name="funs" id="funlist" onchange="funlistchange(this.value)">
         </select>
@@ -353,7 +355,7 @@ window.onload = () => {
     <span>
         <b>shader:</b> trivial<input type="radio" name="shader" onclick="X.threeShader=0">
         three<input type="radio" name="shader" onclick="X.threeShader=1; X.marchtexture=0">
-        organic<input type="radio" name="shader" onclick="X.threeShader=1; X.marchtexture=window.marchtexture" checked="1">
+        organic<input type="radio" name="shader" onclick="X.threeShader=1; X.marchtexture=1" checked="1">
     </span>
     <p class="hhelp">
     Choose shader style.
