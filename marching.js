@@ -1,3 +1,4 @@
+/* eslint-disable no-use-before-define */
 /**
  * now at https://github.com/sjpt/metaballsWebgl
  * Derived from MarchingCubes.js
@@ -29,6 +30,7 @@
 ***/
 var THREE, Stats, queryloadpromise, trywebgl2=true, marchtexture, TextureMaterial;
 
+Marching.marchmatver = 0;
 function Marching(isWebGL2) {
     var me = this;
     var THREESingleChannelFormat = (isWebGL2) ? THREE.RedFormat : THREE.LuminanceFormat;
@@ -69,6 +71,10 @@ const X = me.X = window.X = {
     medialThresh: -999, // threshold for medial surface
     medialColMax: 0.3,  // scale for medial colouring, 0 for plain
     medialStyle: 'frag',   // where to apply medialThresh: box, marchvert, marchfrag. Mix of keywords box, vert, frag
+    medialColorStyle: 'grade',   // style for medial colouring, none or more of mix, grade, left, right, tri, other, this
+                        // note, combined values are valid but not necessarily sensible
+    medialColorBalance: 0.5,    // balance of left/right for some medial colour settings
+    transparent: false, // transparency
     bedtexture: undefined, // if set, use for looking up particle colours
     marchtexture: !!window.TextureMaterial   // use the marchtexture override code
 }
@@ -121,7 +127,7 @@ function beforeRender(renderer, scene, camera) {
 
     check([X.funtype, X.spatdiv, X.npart, X.ntexsize, X.sphereYin], 'spatdivs setfun spatinit fillinit');
     check(!!X.bedtexture, 'fillinit');
-    check(X.marchtexture, 'marchmatgen');
+    check([X.marchtexture, X.medialColorStyle, X.transparent], 'marchmatgen');
     check(X.trackStyle, 'fillinit marchinit');
     check([X.xnum, X.ynum, X.znum, X.yinz, X.threeShader], 'fillinit marchinit boxinit');
     check(X.doubleSide, () => marchmesh.material.needsUpdate = true);
@@ -137,6 +143,7 @@ function beforeRender(renderer, scene, camera) {
 
     boxMarchUniforms.projectionMatrix.value = camera.projectionMatrix;
     boxMarchUniforms.showTriangles.value = X.showTriangles;
+    boxMarchUniforms.medialColorBalance.value = X.medialColorBalance;
     boxMarchUniforms.rotateInside.value = +X.rotateInside;
 
     marchmesh.material.wireframe = X.dowire;
@@ -218,7 +225,8 @@ float getmu(float isol, float valp1, float valp2) {
 }
 `;
 
-codebits.sphereInput = () => `
+codebits.sphereInput = () => /*glsl*/`
+    ${codebits.getpart}
     uniform vec4 spherePosScale;
     uniform sampler2D sphereData;
     uniform sampler2D bedtexture;
@@ -232,9 +240,10 @@ codebits.sphereInput = () => `
         r.xyz *= spherePosScale.w;
         #if (${+!!X.bedtexture})    // ?? extra lookup even on spat pass where it is not used ??
             float xin = iin * float(${X.ntexsize}) / float(${X.npart});   // xin relative to particle length texture
-            vec4 c = texture2D(bedtexture, vec2(xin, 0.25)) * 255.; // 0.25 assumes 2 row texture, but OK for 1 row as well
-            r.w = c.r + c.g * 256. + c.b * 256. * 256.;
+            vec4 c = texture2D(bedtexture, vec2(xin, 0.25)); // 0.25 assumes 2 row texture, but OK for 1 row as well
+            r.w = pack256(c.rgb);
         #endif
+        // if not, then bedtexture r.w may have colour. pass on unchanged
         return r;
     }
 `;
@@ -244,8 +253,8 @@ uniform float medialThresh, medialColMax;
 
 // this decides what final colours will be, then passed via vmarchCol etc and  applied in marchTrackColFrag
 // It does the interpolation work on corners pre-determined by the active edge marchvert
-void VIntCoreVert(vec3 up1, vec3 up2, vec4 trackfa, vec4 trackfb, out vec3 pos, out vec3 norm, out vec4 marchCol ) {
-    #if trackStyle == trackMedial && ${+(X.medialStyle.indexOf('vert') !== -1)} != 0
+void VIntCoreVert(vec3 up1, vec3 up2, vec4 trackfa, vec4 trackfb, out vec3 pos, out vec3 norm, out vec4 marchCol, out vec4 marchColB ) {
+    #if trackStyle == trackMedial && ${+contains(X.medialStyle, 'vert')} != 0
         if (trackfa.x < medialThresh || trackfb.x < medialThresh) {
             pos = vec3(sqrt(medialThresh-1e10)); norm=vec3(0,0,1); marchCol=vec4(1,1,0,1); return;
         }
@@ -257,13 +266,10 @@ void VIntCoreVert(vec3 up1, vec3 up2, vec4 trackfa, vec4 trackfb, out vec3 pos, 
     #if trackStyle == trackColor
         marchCol.rgb = trackfa.rgb * (1.-mu) + trackfb.rgb * mu;
     #elif trackStyle == trackMedial
-        if (medialColMax == 0.) {
-            marchCol.rgb = vec3(1);
-        } else {
-            float p = trackfa.x * (1.-mu) + trackfb.x * mu;
-            p *= medialColMax;
-            marchCol.rgba = clamp(vec4(p, p, 1.-p, sqrt(p)), 0., 1.);  // << todo, better tuning of feathered edge
-        }
+        float p = trackfa.x * (1.-mu) + trackfb.x * mu;
+        // p *= medialColMax;
+        marchCol = vec4(unpack256(trackfa.y), p);
+        marchColB = vec4(unpack256(trackfb.z), p);
     #elif trackStyle == trackId1
         marchCol.rgb = (trackfa.y * (1.-mu) > trackfb.y * mu ? trackfa : trackfb).rgb;
     #else
@@ -408,12 +414,12 @@ float keyi(float f000, float f100, float f010, float f110, float f001, float f10
 codebits.avghit = /*glsl*/`// codebits.VintX
     vec3 cpos, cnorm, cvmarchCol; float ccn;
     void VIntX(vec3 p1, vec3 p2, vec4 f1, vec4 f2) {
-        vec3 pos, norm; vec4 col;
+        vec3 pos, norm; vec4 col, colb;
         if ((isol - f1.w) * (isol - f2.w) >= 0.) return;
-        VIntCoreVert(p1, p2, f1, f2, pos, norm, col);
+        VIntCoreVert(p1, p2, f1, f2, pos, norm, col, colb);
         cpos += pos;
         cnorm += norm;
-        cvmarchCol += col.rgb;
+        cvmarchCol += (col.rgb + colb.rgb) * 0.5;
         ccn++;
     }
 
@@ -472,20 +478,20 @@ codebits.track = () => /*glsl*/`// codbits.track
     #define trackMedial 3
     #define trackStyle ${X.trackStyle}
     #if trackStyle == trackColor
-        #define Track vec3
         vec3 trackC = vec3(0,0,0);
+    #elif trackStyle == trackMedial
+        vec3 trackC1 = vec3(0,0,0);
+        vec3 trackC2 = vec3(0,0,0);
     #elif trackStyle == trackId1
-        #define Track vec2
         vec2 trackI1 = vec2(-1,0);     // id, val
         // #define trackId track.x
         #define trackV trackI1.y
     #else
-        #define Track float // unused
         float trackF = 0.;
     #endif
 
-    uniform float showTriangles, rotateInside;
-    varying vec4 vmarchCol;         // collect output colour
+    uniform float showTriangles, rotateInside, medialColorBalance;
+    varying vec4 vmarchCol, vmarchColB;         // collect output colour(s)
     varying vec3 norm;              // collect normal
     varying vec3 whichVert;         // used to track where in triangle, help reconstruct whichId and whichF
     #if trackStyle == trackId1
@@ -500,19 +506,48 @@ codebits.track = () => /*glsl*/`// codbits.track
 
 codebits.marchTrackColFragc = () => /*glsl*/`// codebits.marchTrackColFragc
 
-uniform float medialThresh;
+uniform float medialThresh, medialColMax;
 void marchTrackColFrag(inout vec4 inoutcol) {
     // collect rgb according to tracking rules.
-    // data in vmarchCol was established in vertex phase by VIntCoreVert
+    // data in vmarchCol(B) was established in vertex phase by VIntCoreVert
     #if trackStyle == trackColor        // track colour as set in original sphere array w field, or bedbuffer
         inoutcol.xyz *= vmarchCol.xyz;
     // #elif trackStyle == trackNone       // DEBUG TEST vmarchCol should be 1,1,1
-    //     inoutcol *= vmarchCol;
+    //     inoutcol *= vmarchCol * ;
     #elif trackStyle == trackMedial     // track colour derived from medial closeness
-        #if ${+(X.medialStyle.indexOf('frag') !== -1)} != 0
+        float p = clamp(vmarchCol.a * medialColMax, 0., 1.);
+        float b = medialColorBalance;
+        float b1 = 1. - b;
+        #if ${+contains(X.medialStyle, 'frag')}
             if (vmarchCol.w < medialThresh) discard;
         #endif
-        inoutcol *= vmarchCol;
+        #if ${+X.transparent}
+            inoutcol.a *= p;
+        #endif
+        #if ${+contains(X.medialColorStyle, 'mix')}
+            inoutcol.rgb *= (vmarchCol.rgb * b  + vmarchColB.rgb * b1);
+        #endif
+        #if ${+contains(X.medialColorStyle, 'tri')}
+            inoutcol.rgb *= whichVert.x * b < whichVert.y * b1 ? vmarchCol.rgb : vmarchColB.rgb;
+        #endif
+        #if ${+contains(X.medialColorStyle, 'cen')}
+            inoutcol.rgb *= max(whichVert.x, max(whichVert.y, whichVert.z)) < b ? vmarchCol.rgb : vmarchColB.rgb;
+        #endif
+        #if ${+contains(X.medialColorStyle, 'other')}
+            inoutcol.rgb *= gl_FrontFacing ? vmarchCol.rgb : vmarchColB.rgb;
+        #endif
+        #if ${+contains(X.medialColorStyle, 'this')}
+            inoutcol.rgb *= !gl_FrontFacing ? vmarchCol.rgb : vmarchColB.rgb;
+        #endif
+        #if ${+contains(X.medialColorStyle, 'left')}
+            inoutcol.rgb *= vmarchCol.rgb;
+        #endif
+        #if ${+contains(X.medialColorStyle, 'right')}
+            inoutcol.rgb *= vmarchColB.rgb;
+        #endif
+        #if ${+contains(X.medialColorStyle, 'grade')}
+            inoutcol.rgb *= vec3(p, p, 1.-p);
+        #endif
     #elif trackStyle == trackId1
         // find best trackId, reconstruct ids and consider different cases
         // all equal whole triangle is same id
@@ -559,6 +594,15 @@ float getpart(inout int a, int b) {
 float getpart(inout int a, float b) {
     return getpart(a, int(b));
 }
+vec3 unpack256(float w) {
+    vec3 r; r.x = getpart(w, 256.);  r.y = getpart(w, 256.); r.z = w;
+    return r / 255.;
+}
+float pack256(vec3 v) {
+    v = floor(v * 255.);
+    return v.x + v.y * 256. + v.z * 256. * 256.;
+}
+
 #endif
 // codebits.getpart`
 
@@ -566,7 +610,7 @@ float getpart(inout int a, float b) {
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // code for marching cubes pass
-var marchgeom, marchmat, marchmatver=0, marchvert, marchfrag, boxMarchUniforms, marchmesh, marchpoints, triTexture, legonormTexture;
+var marchgeom, marchmat, marchvert, marchfrag, boxMarchUniforms, marchmesh, marchpoints, triTexture, legonormTexture;
 
 me.three = marchmesh = new THREE.Mesh();    // create on construction so available at once
 marchmesh.frustumCulled = false;
@@ -593,6 +637,7 @@ boxMarchUniforms = {
     spherePosScale: {value: new THREE.Vector4(0,0,0,1)},
     funRange: {value: X.funRange},
     showTriangles: {value: 0},
+    medialColorBalance: {value: 0.5},
     rotateInside: {value: 0},
     projectionMatrix: {value: undefined},
     modelViewMatrix: {value: new THREE.Matrix4()},          // contents set by three.js
@@ -618,7 +663,7 @@ function marchgeomgen() {
     let posb, posatt;
     if (instancing) { // assume webgl2 for now
         marchgeom = new THREE.InstancedBufferGeometry(); marchgeom.name = 'marchgeom';
-        if (!marchgeom.setAttribute) marchgeom.setAttribute = marchgeom.addAttribute;       // older three.js
+        //if (!marchgeom.setAttribute) marchgeom.setAttribute = marchgeom.setAttribute;       // older three.js
         if (isWebGL2) {
             marchgeom.drawRange.count = maxt*3;
             posb = new Uint8Array(maxt*3); // data not used, but size used inside three.js for wireframe << needed till three.js fix
@@ -712,7 +757,7 @@ vec3 up1, up2;     // grid coordinates for ends and step between them, set by VI
 // varying vec4 vmarchCol;
 void VIntReal(out vec3 pos) {
     vec4 trackfa = fillLook(up1.x, up1.y, up1.z), trackfb = fillLook(up2.x, up2.y, up2.z);
-    VIntCoreVert(up1, up2, trackfa, trackfb, pos, norm, vmarchCol);
+    VIntCoreVert(up1, up2, trackfa, trackfb, pos, norm, vmarchCol, vmarchColB);
 }
 
 // save details of ends of edge, ready to compute intersection point
@@ -940,11 +985,11 @@ void main() {               // marchfragmain ... simple version
             marchmat.onBeforeCompile = onBeforeCompile;
         }
 
-        // defines needed here to resolve three.js cahce conflict
+        // defines needed here to resolve three.js cache conflict
         // https://github.com/mrdoob/three.js/issues/19377
         // defines could be used to replace ${xnum} etc with plain xnum
         // but for the moment at least using .define breaks our raw shader in webgl2
-        marchmat.defines = {xnum, ynum, znum, XtrackStyle: X.trackStyle, ver: marchmatver++};
+        marchmat.defines = {xnum, ynum, znum, XtrackStyle: X.trackStyle, ver: Marching.marchmatver++};
         me.material = marchmat;
     }
 
@@ -1424,7 +1469,6 @@ ${codebits.track()}
 // to avoid lookup/compute for inactive spheres
 // return field potential, side effect updates track,
 // compute and return +ve and -ve values separately
-
 vec2 fillspatiali(float ii, float activeKey, float x, float y, float z) {
     float t = 0., tm = 0.;
     for (float i = 0.; i < ${A}.; i++) {
@@ -1440,12 +1484,18 @@ vec2 fillspatiali(float ii, float activeKey, float x, float y, float z) {
             float tme = shape(d2);
 
             #if trackStyle == trackMedial
-                if (i + ii < medialNeg) t += tme; else tm += tme;
+                if (i + ii < medialNeg) {
+                    trackC1 += tme * unpack256(d.w);
+                    t += tme;
+                } else {
+                    trackC2 += tme * unpack256(d.w);
+                    tm += tme;
+                }
             #else
                 t += tme;
             #endif
             #if trackStyle == trackColor
-                trackC += tme * vec3(getpart(d.w, 256.)/255., getpart(d.w, 256.)/255., getpart(d.w, 256.)/255.);
+                trackC += tme * unpack256(d.w);
             #elif trackStyle == trackId1
                 if (tme > trackV) {
                     trackI1 = vec2(i, tme);
@@ -1478,6 +1528,7 @@ vec3 fillspatial(float x, float y, float z) {
     return vec3(r, t.x, t.y);
 }
 
+#define safediv(x,y) (x/max(y,1e-20))
 void main() {           // fill fragment shader fillfragmain
     ${codebits.getxyzi()}    // get xi yi zi from 2d position
 
@@ -1491,9 +1542,9 @@ void main() {           // fill fragment shader fillfragmain
     #if trackStyle == trackId1
         gl_FragColor = vec4(trackI1, -99, vv.x);
     #elif trackStyle == trackColor
-        gl_FragColor = vec4(trackC/max(vv.x,1e-20), vv.x);
+        gl_FragColor = vec4(safediv(trackC, vv.x), vv.x);
     #elif trackStyle == trackMedial
-        gl_FragColor = vec4(min(vv.y, vv.z), vv.y, vv.z, vv.x);   // min, val1, val2, diff
+        gl_FragColor = vec4(min(vv.y, vv.z), pack256(safediv(trackC1,vv.y)), pack256(safediv(trackC2, vv.z)), vv.x);   // min, col1, col2, diff
     #else
         gl_FragColor = vec4(1,1,1, vv.x);
     #endif
@@ -1597,8 +1648,9 @@ void main() {   // box fragment boxfragmain
     #if ${+X.surfnet}
         avghit(xi, yi, zi);  // output in cpos, cnorm, cvmarchCol, ccn  // surfbox structure set
         if (ccn == 0.) { gl_FragColor = vec4(-1); return; }
-        vec3 rnorm = floor((normalize(cnorm) + 1.) * 127. + 0.5);
-        float xnorm = rnorm.z * 256. * 256. + rnorm.y * 256. + rnorm.x;
+        vec3 rnorm = normalize(cnorm) * 0.5 + 0.5;        // 0..1
+        float xnorm = pack256(rnorm);
+
         gl_FragColor = vec4(cpos / ccn, xnorm);
         return;
     #endif
@@ -1610,7 +1662,7 @@ void main() {   // box fragment boxfragmain
     if (key == 0. || key == 255.) { // all inside or all outside, or in nether regions
         key = -1.;
     }
-    #if ${+(X.medialStyle.indexOf('box') !== -1)} != 0
+    #if ${+contains(X.medialStyle, 'box')}
         if (min(abs(f000.w), min(abs(f100.w), min(abs(f010.w), min(abs(f110.w), min(abs(f001.w), min(abs(f101.w), min(abs(f011.w), abs(f111.w)))))))) < medialThresh)
             key = -1.;
     #endif
@@ -1755,7 +1807,7 @@ function surfinit() {
     const maxtri = 6;   // possible triangles for single voxel
     if (X.instancing) {
         surfgeom = new THREE.InstancedBufferGeometry(); surfgeom.name = 'surfgeom';
-        if (!surfgeom.setAttribute) surfgeom.setAttribute = surfgeom.addAttribute;       // older three.js
+        //if (!surfgeom.setAttribute) surfgeom.setAttribute = surfgeom.setAttribute;       // older three.js
 
         let indb, posb, oposb;
         if (X.lego) {
@@ -1806,7 +1858,7 @@ function surfinit() {
         surfgeom.instanceCount = voxs;
     } else {
         surfgeom = new THREE.BufferGeometry(); surfgeom.name = 'surfgeom';
-        if (!surfgeom.setAttribute) surfgeom.setAttribute = surfgeom.addAttribute;       // older three.js
+        //if (!surfgeom.setAttribute) surfgeom.setAttribute = surfgeom.setAttribute;       // older three.js
         const posb = new Float32Array(voxs*3);
         let p = 0;
         for (let z = 0; z < (znum-2); z++)
@@ -1899,15 +1951,17 @@ function surfinit() {
             if (olook.w < 0.) { gl_Position = vec4(NaN); return; }
         }
 
-        #if ${+X.lego}                    // surfbox structure used
+        #if ${+X.lego}                    // corerce to voxel centre
             look.xyz = vec3(xi, yi, zi) + 0.5;
         #endif
         transformed = (look.xyz + 0.5) / nump * 2. -1.;;
         vec4 viewpos = modelViewMatrix * vec4(transformed, 1);
         gl_Position = projectionMatrix * viewpos;
-        vmarchCol.rgb = fillLook(xi, yi, zi).xyz;
-        norm.x = getpart(look.w, 256.); norm.y = getpart(look.w, 256.); norm.z = look.w;
-        norm = norm / 127. - 1.;
+        // next two lines need refinement, but at least this works
+        vmarchCol.rgb = fillLook(xi, yi, zi).xyz /255.;
+        vmarchCol.a = 1.;
+        norm = unpack256(look.w);
+        norm = norm * 2. - 1.;
         //norm = compNorm(vec3(xi, yi, zi));
         norm = -mat3(modelViewMatrix) * ${X.lego ? 'normal' : 'norm'};
         if (dot(viewpos.xyz, norm) > 0.) {norm *= -1.; vmarchCol.rgb = 1. - vmarchCol.rgb; }
@@ -1915,7 +1969,6 @@ function surfinit() {
         //whichVert = vec3(1,1,1);
         //whichId = vec3(1,1,1);
         //whichF = vec3(1,1,1);
-
     }
 // end surfvert  `;
     surfmat = new THREE.RawShaderMaterial({
@@ -2037,6 +2090,6 @@ var legomid;
 
 })();
 
-
+function contains(str, t) {return str.indexOf(t) !== -1;}
 
 } // end Marching
