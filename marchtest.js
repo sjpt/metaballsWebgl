@@ -155,7 +155,7 @@ function jstring(k) {
         function jrep (key, val) {
             return val && val.toFixed ? Number(val.toFixed(3)) : val;
         }, '<br>'
-    ).split('"').join('');
+    ).split('"').join('').split('<br><br>').join('');
 }
 
 function funkeyup(evt) {
