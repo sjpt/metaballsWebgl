@@ -125,7 +125,7 @@ function beforeRender(renderer, scene, camera) {
         cn++;
     }
 
-    check([X.funtype, X.spatdiv, X.npart, X.ntexsize, X.sphereYin], 'spatdivs setfun spatinit fillinit');
+    check([X.funtype, X.spatdiv, X.npart, X.ntexsize, X.sphereYin], 'setspatdivs setfun spatinit fillinit');
     check(!!X.bedtexture, 'fillinit');
     check([X.marchtexture, X.medialColorStyle, X.transparent], 'marchmatgen');
     check(X.trackStyle, 'fillinit marchinit');
