@@ -72,7 +72,7 @@ function marchTestInit() {
     camera.add(lightGroup);
     scene.add(camera);
     lighta = new THREE.AmbientLight( 0xffffff, 0.1 ); lightGroup.add(lighta);
-    light = new THREE.DirectionalLight(THREE.Color.NAMES.white, 1); lightGroup.add(light)
+    light = new THREE.DirectionalLight(THREE.Color.NAMES.white, Math.PI); lightGroup.add(light); // nb intensity change for three lighting around rev 165
     light.position.set(0.6, 0.3, 1);
 
     marching = new Marching(isWebGL2);

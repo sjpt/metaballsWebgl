@@ -7,16 +7,23 @@
             input[type="range"] {width: 20em}
         </style>
         <!-- <script src="https://rawgit.com/mrdoob/three.js/dev/build/three.js"></script> -->
-        <script src="three150.js"></script>
-        <script src="TrackballControls.js"></script>
-        <script src="https://rawgit.com/mrdoob/stats.js/master/build/stats.js"></script>
+        <!-- <script src="three150.js"></script> -->
+        <script type="module">
+            console.log('start getthreemod')
+            import * as THREE from './three168.module.js';
+            console.log('import done getthreemod')
+            window.THREE = Object.assign({}, THREE)
+            console.log('export done getthreemod')
+        </script>
+        <script defer src="TrackballControls.js"></script>
+        <script defer src="https://rawgit.com/mrdoob/stats.js/master/build/stats.js"></script>
 
-        <script src="marching.js"></script>
-        <script src="marchtest.js"></script>
-        <script src="testdata.js"></script>
+        <script defer src="marching.js"></script>
+        <script defer src="marchtest.js"></script>
+        <script defer src="testdata.js"></script>
 
-        <script src="../TextureMaterial/col.js"></script>
-        <script src="../TextureMaterial/TextureMaterial.js" type="module"></script>
+        <script defer src="../TextureMaterial/col.js"></script>
+        <script defer src="../TextureMaterial/TextureMaterial.js" type="module"></script>
 
 	</head>
 	<body style="overflow: hidden;">
