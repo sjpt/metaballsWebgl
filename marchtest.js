@@ -59,14 +59,16 @@ function marchTestInit() {
     // controls.screenSpacePanning = false;
     window.addEventListener( 'resize', onWindowResize, false );
 
-    stats = new Stats();
-    stats.domElement.id = 'statsid';
-    stats.domElement.style.top = '0';
-    stats.domElement.style.right = '0';
-    stats.domElement.style.left = '';
-    stats.domElement.style.position = 'absolute';
-    document.body.appendChild( stats.domElement );
-
+    if (Stats) {
+        stats = new Stats();
+        stats.domElement.id = 'statsid';
+        stats.domElement.style.top = '0';
+        stats.domElement.style.right = '0';
+        stats.domElement.style.left = '';
+        stats.domElement.style.position = 'absolute';
+        document.body.appendChild( stats.domElement );
+    }
+    
     scene = new THREE.Scene();
     lightGroup = new THREE.Group();
     camera.add(lightGroup);
@@ -191,7 +193,7 @@ function animate() {
         else if (X.doshade)
             renderer.render(scene, camera);                      // normal path
     }
-    stats.update();
+    if (stats) stats.update();
     window.msg.innerHTML = `${jstring(X)}`;
     marching.expose();                      // to help debug, overkill every frame, but just in case
 }

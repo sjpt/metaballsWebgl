@@ -1,3 +1,4 @@
+/* sjpt change 18 March 2026 */
 /* eslint-disable no-use-before-define */
 /**
  * now at https://github.com/sjpt/metaballsWebgl
