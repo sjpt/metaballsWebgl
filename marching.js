@@ -933,6 +933,7 @@ void main() {               // marchfragmain ... simple version
                 gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.);
             }`;
         marchmat = new THREE.RawShaderMaterial({
+            name: 'marchmat',
             fragmentShader: marchfrag(),
             vertexShader: marchvert,
             uniforms: boxMarchUniforms
@@ -1568,6 +1569,7 @@ void main() {           // fill fragment shader fillfragmain
     Object.assign(spatFillUniforms, fillUniforms);
 
     var shader = new THREE.RawShaderMaterial({
+        name: 'fillmat',
         fragmentShader: fillfrag,
         vertexShader: fillvert,
         uniforms: spatFillUniforms
@@ -1678,6 +1680,7 @@ void main() {   // box fragment boxfragmain
 }
 `
 boxmaterial = new THREE.RawShaderMaterial({
+    name: 'boxmaterial',
     vertexShader: boxvert,
     fragmentShader: boxfrag,
     uniforms: boxMarchUniforms
@@ -1776,6 +1779,7 @@ void main() {               // spatial fragment shader
 `
 
     spatmat = new THREE.RawShaderMaterial({
+        name: 'spatial material',
         fragmentShader: spatfrag,
         vertexShader: spatvert,
         uniforms: spatFillUniforms
@@ -1972,6 +1976,7 @@ function surfinit() {
     }
 // end surfvert  `;
     surfmat = new THREE.RawShaderMaterial({
+        name: 'surfmat',
         vertexShader: surfvert,
         fragmentShader: marchfrag(),
         uniforms: boxMarchUniforms
